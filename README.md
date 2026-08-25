@@ -15,7 +15,13 @@ npm test             # 66 tests de logica de juego
 npm run sim          # simula una partida completa en consola
 npm run sim -- 1000 40   # 40 partidas: informe de balance
 npm run build        # bundle de produccion
+npm run build:single # un unico HTML autocontenido, sin peticiones externas
 ```
+
+`build:single` produce `dist-single/operacion-9-dias.html`: el juego entero en un
+fichero de ~780 kB que corre desde `file://`, desde cualquier hosting estatico o
+dentro de un sandbox que bloquee peticiones externas. La ciudad se guarda en
+`localStorage`, asi que la metaprogresion sobrevive a recargar la pagina.
 
 ## El loop
 
