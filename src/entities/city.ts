@@ -7,8 +7,7 @@ import {
   type CityEffects,
 } from '../data/buildings.city';
 import { COMMANDERS, commanderXpForLevel, MAX_COMMANDER_LEVEL } from '../data/commanders';
-import { MAX_TROOP_LEVEL, TROOPS, TROOP_IDS, troopDef, troopUpgradeCost } from '../data/troops';
-import type { ResourceCost } from '../data/troops';
+import { MAX_TROOP_LEVEL, TROOP_IDS, troopDef, troopUpgradeCost } from '../data/troops';
 
 export interface CommanderProgress {
   id: string;
@@ -79,14 +78,6 @@ export function cityBuildingLevel(city: CityState, id: string): number {
 
 export function cityTier(city: CityState): number {
   return Math.max(1, cityBuildingLevel(city, 'command_center'));
-}
-
-/** Cost of taking a building from its current level to the next one. */
-export function nextLevelCost(city: CityState, id: string): CityCost | null {
-  const def = cityBuildingDef(id);
-  const level = cityBuildingLevel(city, id);
-  if (level >= def.maxLevel) return null;
-  return def.costPerLevel[level] ?? null;
 }
 
 export interface UpgradeCheck {
@@ -288,12 +279,6 @@ export function unlockedCommanders(city: CityState): string[] {
   return syncCommanderRoster(city);
 }
 
-/** Troops the city is technologically able to field at all. */
-export function unlockedTroopsForCity(city: CityState): string[] {
-  const tier = cityTier(city);
-  return TROOP_IDS.filter((id) => TROOPS[id].cityTier <= tier);
-}
-
 /** Applies commander XP and levels up, returning the levels gained. */
 export function awardCommanderXp(city: CityState, commanderId: string, xp: number): number {
   const progress = city.commanders[commanderId];
@@ -317,9 +302,3 @@ export function addCityResources(city: CityState, amounts: Record<string, number
   }
 }
 
-/** Cost helper shared by the UI. */
-export function troopUpgradeCostForCity(city: CityState, troopId: string): ResourceCost | null {
-  const level = city.troopLevels[troopId] ?? 1;
-  if (level >= MAX_TROOP_LEVEL) return null;
-  return troopUpgradeCost(troopDef(troopId), level);
-}

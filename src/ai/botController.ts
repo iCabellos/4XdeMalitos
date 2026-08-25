@@ -4,7 +4,7 @@
  * commands from elsewhere, not rewriting the match.
  */
 import { hexDistanceId, type HexId } from '../map/hex';
-import { mapBuildingDef, MAP_BUILDING_IDS, type MapBuildingId } from '../data/buildings.map';
+import { mapBuildingDef, type MapBuildingId } from '../data/buildings.map';
 import { troopDef } from '../data/troops';
 import { BALANCE } from '../data/balance';
 import { RESEARCH_PRIORITY, STRATEGIES, TROOP_PRIORITY } from './strategies';
@@ -324,4 +324,3 @@ function strategicTargets(state: MatchState, player: MatchPlayer): HexId[] {
   return out;
 }
 
-export const BOT_BUILDINGS = MAP_BUILDING_IDS;

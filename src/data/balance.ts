@@ -137,8 +137,6 @@ export const BALANCE = {
   },
 
   bots: {
-    /** Bots receive this multiplier on production to compensate for simpler play. */
-    productionHandicap: 1.15,
     /** How willing a bot is to attack when it has this power ratio advantage. */
     attackPowerRatio: 1.25,
     /** Bots evaluate this many candidate hexes per decision to bound cost. */

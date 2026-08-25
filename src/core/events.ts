@@ -27,6 +27,3 @@ export function eventsForDay(state: MatchState, day: number): MatchEvent[] {
   return state.events.filter((e) => e.day === day);
 }
 
-export function recentEvents(state: MatchState, count: number): MatchEvent[] {
-  return state.events.slice(-count).reverse();
-}

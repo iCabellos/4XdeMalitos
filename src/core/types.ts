@@ -152,8 +152,6 @@ export interface MatchPlayer {
   citizensTotal: number;
   /** Researched technology ids. */
   technologies: string[];
-  /** Technology currently being researched, if any. */
-  researching: string | null;
   /** Troop levels for this match, seeded from the city. */
   troopLevels: Record<string, number>;
   /** Regions this player may enter. */
@@ -198,7 +196,6 @@ export interface PlayerModifiers {
   /** Troop ids unlocked beyond the always-available set. */
   unlockedTroops: string[];
   unlockedBuildings: string[];
-  troopLevelCap: number;
   gatherMultiplier: number;
 }
 
@@ -298,7 +295,6 @@ export function defaultModifiers(): PlayerModifiers {
     storageBonus: 0,
     unlockedTroops: [],
     unlockedBuildings: [],
-    troopLevelCap: 2,
     gatherMultiplier: 1,
   };
 }

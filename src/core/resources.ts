@@ -67,41 +67,6 @@ export function grantMany(player: MatchPlayer, amounts: Partial<Record<string, n
   return total;
 }
 
-/** Drains as much of `cost` as possible; returns true only if fully paid. */
-export function drainPartial(stock: Stock, cost: ResourceCost): boolean {
-  let fullyPaid = true;
-  for (const [key, amount] of Object.entries(cost)) {
-    if (!amount) continue;
-    const id = key as AnyMatchResourceId;
-    if (stock[id] < amount) {
-      stock[id] = 0;
-      fullyPaid = false;
-    } else {
-      stock[id] -= amount;
-    }
-  }
-  return fullyPaid;
-}
-
-export function addCost(a: ResourceCost, b: ResourceCost): ResourceCost {
-  const out: ResourceCost = { ...a };
-  for (const [key, amount] of Object.entries(b)) {
-    if (!amount) continue;
-    const id = key as AnyMatchResourceId;
-    out[id] = (out[id] ?? 0) + amount;
-  }
-  return out;
-}
-
-export function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
-  const out: ResourceCost = {};
-  for (const [key, amount] of Object.entries(cost)) {
-    if (!amount) continue;
-    out[key as AnyMatchResourceId] = Math.round(amount * factor);
-  }
-  return out;
-}
-
 export function totalRare(stock: Stock): number {
   return stock.titanium + stock.uranium + stock.crystal;
 }

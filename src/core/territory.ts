@@ -16,9 +16,16 @@ export function updateTerritory(state: MatchState): void {
     (claims[hex] ??= {})[playerId] = (claims[hex][playerId] ?? 0) + weight;
   };
 
-  // Start positions are permanent, heavy claims: a capital is never neutral.
+  // A capital is a heavy claim, but not an inviolable one: an enemy army
+  // standing on it suppresses the claim. Without this the owner could never
+  // lose their base, and elimination would be unreachable by construction.
   for (const tile of Object.values(state.tiles)) {
-    if (tile.feature.startFor) addClaim(tile.id, tile.feature.startFor, 1000);
+    const owner = tile.feature.startFor;
+    if (!owner) continue;
+    const occupied = Object.values(state.armies).some(
+      (a) => a.hex === tile.id && a.owner !== owner,
+    );
+    if (!occupied) addClaim(tile.id, owner, 1000);
   }
 
   // Buildings project control over their claim radius.
@@ -72,6 +79,3 @@ export function updateTerritory(state: MatchState): void {
   }
 }
 
-export function territoryOf(state: MatchState, playerId: PlayerId): HexId[] {
-  return state.tileOrder.filter((id) => state.tiles[id].controlledBy === playerId);
-}

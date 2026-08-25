@@ -133,7 +133,6 @@ export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
 
 /** Roads are an overlay on top of terrain, not a terrain type. */
 export const ROAD_MOVE_COST = 0.5;
-export const ROAD_SPEED_BONUS = 1.2;
 
 export interface ResourceNodeDefinition {
   id: string;

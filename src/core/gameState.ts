@@ -72,7 +72,6 @@ export function buildHumanLoadout(city: CityState): PlayerLoadout {
   baseModifiers.defenseMultiplier = effects.defenseMultiplier;
   baseModifiers.movementBonus = effects.movementBonus;
   baseModifiers.storageBonus = effects.storage;
-  baseModifiers.troopLevelCap = effects.troopLevelCap;
 
   return {
     cityTier: effects.cityTier,
@@ -108,7 +107,6 @@ export function buildBotLoadout(
   baseModifiers.scienceMultiplier = 1 + (tier - 1) * 0.1;
   baseModifiers.attackMultiplier = 1 + (tier - 1) * 0.05;
   baseModifiers.defenseMultiplier = 1 + (tier - 1) * 0.05;
-  baseModifiers.troopLevelCap = Math.min(5, 1 + tier);
 
   const troopLevels: Record<string, number> = {};
   const botTroopLevel = Math.max(1, Math.min(5, Math.round(averageTroopLevel(humanLoadout))));
@@ -183,7 +181,6 @@ function createPlayer(
     citizensFree: 0,
     citizensTotal: 0,
     technologies: [],
-    researching: null,
     troopLevels: { ...loadout.troopLevels },
     unlockedRegions: [],
     fog: {},

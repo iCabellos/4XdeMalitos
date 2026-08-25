@@ -167,8 +167,10 @@ export function captureBuilding(state: MatchState, buildingInstanceId: string, n
   const oldPlayer = state.players.find((p) => p.id === instance.owner);
   const newPlayer = state.players.find((p) => p.id === newOwner);
   if (oldPlayer) {
-    oldPlayer.citizensFree = Math.min(oldPlayer.citizensTotal, oldPlayer.citizensFree + instance.citizens);
-    oldPlayer.citizensTotal = Math.max(0, oldPlayer.citizensTotal);
+    oldPlayer.citizensFree = Math.min(
+      oldPlayer.citizensTotal,
+      oldPlayer.citizensFree + instance.citizens,
+    );
   }
   if (!newPlayer || newPlayer.citizensFree < instance.citizens) {
     // The new owner cannot man it: the structure is wrecked instead.

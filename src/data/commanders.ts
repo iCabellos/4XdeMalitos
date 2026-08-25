@@ -147,8 +147,6 @@ export const COMMANDERS: Record<string, CommanderDefinition> = {
   },
 };
 
-export const COMMANDER_IDS = Object.keys(COMMANDERS);
-
 export function commanderDef(id: string): CommanderDefinition {
   const def = COMMANDERS[id];
   if (!def) throw new Error(`Comandante desconocido: ${id}`);

@@ -7,7 +7,6 @@
 import { hexDistanceId, type HexId } from '../map/hex';
 import { mapBuildingDef, type MapBuildingId } from '../data/buildings.map';
 import { troopDef } from '../data/troops';
-import { BALANCE } from '../data/balance';
 import { logEvent } from './events';
 import { resolveCombat } from './combat';
 import { build, canBuild, captureBuilding, canUpgradeBuilding, upgradeBuilding } from './construction';
@@ -45,10 +44,6 @@ function armyOf(state: MatchState, armyId: string): Army | null {
 
 export function enemyArmiesAt(state: MatchState, hex: HexId, playerId: PlayerId): Army[] {
   return Object.values(state.armies).filter((a) => a.hex === hex && a.owner !== playerId && !isArmyEmpty(a));
-}
-
-export function friendlyArmiesAt(state: MatchState, hex: HexId, playerId: PlayerId): Army[] {
-  return Object.values(state.armies).filter((a) => a.hex === hex && a.owner === playerId);
 }
 
 /**
@@ -211,11 +206,6 @@ export function attack(state: MatchState, armyId: string, target: HexId): Action
   // Clean up wiped formations.
   if (outcome.defenderDestroyed) delete state.armies[defender.id];
   if (outcome.attackerDestroyed) delete state.armies[army.id];
-
-  // Award commander experience for the destroyed force.
-  if (outcome.report.winner === player.id && army.commanderId) {
-    army.lastOrder = { type: 'attack', target };
-  }
 
   if (outcome.report.winner === player.id && outcome.defenderDestroyed && distance === 1) {
     const remainingDefenders = enemyArmiesAt(state, target, army.owner);
@@ -533,13 +523,3 @@ export function proposeNonAggression(
   return ok();
 }
 
-export const ACTION_LABELS = {
-  move: 'MOVER',
-  attack: 'ATACAR',
-  gather: 'RECOLECTAR',
-  build: 'CONSTRUIR',
-  scout: 'EXPLORAR',
-  capture: 'CAPTURAR',
-} as const;
-
-export { BALANCE };

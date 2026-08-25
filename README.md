@@ -112,17 +112,30 @@ convierte las partidas en un paseo.
 
 ## Balance actual
 
-40 partidas simuladas (semillas 1000-1039):
+Dos barridos independientes de 40 partidas (`npm run sim -- <semilla> 40`):
 
 ```
-Victorias por perfil: explorer 4 · military 6 · diplomatic 14 · humano(auto) 10 · economic 6
-Final de partida:     objetivo 12 (30%) · puntuacion 28 (70%)
-Dias medios:          7.35
+semillas 1000-1039   diplomatic 14 · humano(auto) 10 · military 6 · economic 6 · explorer 4
+                     objetivo 12 (30%) · puntuacion 28 (70%) · 7.35 dias de media
+
+semillas 7000-7039   diplomatic 15 · humano(auto) 11 · economic 8 · military 5 · explorer 1
+                     objetivo  7 (18%) · puntuacion 33 (82%) · 8.00 dias de media
 ```
 
-Los cinco perfiles ganan partidas y el objetivo principal se consigue en un
-30% de los casos: es alcanzable pero disputado. No es un balance final, pero si
-un espacio de decisiones vivo.
+Lo que dicen estos numeros:
+
+- **Los cinco perfiles ganan partidas.** No hay una estrategia unica dominante.
+- **El objetivo principal se consigue entre un 18% y un 30% de las veces.** Es
+  alcanzable pero disputado, que es lo que se buscaba: obliga a competir por el
+  centro sin convertir la partida en una carrera resuelta.
+- **Hallazgo pendiente de ajuste: el perfil diplomatico gana demasiado** (~36%
+  frente al 20% que le tocaria) y el explorador demasiado poco. El diplomatico
+  acumula defensa y ciencia a la vez y evita perder tropas; el explorador paga
+  movilidad y vision sin poder convertirlas en control. Es el primer numero que
+  tocaria mover en una pasada de balance.
+
+No es un balance final. Es un espacio de decisiones vivo y un arnes que permite
+medirlo en segundos.
 
 ## Controles
 

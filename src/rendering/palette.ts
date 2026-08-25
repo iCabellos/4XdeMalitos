@@ -13,8 +13,6 @@ export const PALETTE = {
   cache: 0xc8a165,
 };
 
-export const CSS_PLAYER_COLORS = ['#4da3ff', '#ff6b4d', '#63d471', '#ffd166', '#c77dff'];
-
 export function hexToCss(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }

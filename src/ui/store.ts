@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { HexId } from '../map/hex';
-import type { MapBuildingId } from '../data/buildings.map';
 import type { MatchState } from '../core/types';
 import { createMatch } from '../core/gameState';
 import { startDay, endDay } from '../core/turnSystem';
@@ -17,11 +16,7 @@ export type Screen = 'city' | 'matchmaking' | 'match' | 'results' | 'simulator';
  * makes the UI touch-friendly: choose the verb, then tap the target, with no
  * drag gestures or hover states required.
  */
-export type PendingAction =
-  | { type: 'move' }
-  | { type: 'attack' }
-  | { type: 'build'; buildingId: MapBuildingId }
-  | null;
+export type PendingAction = { type: 'move' } | { type: 'attack' } | null;
 
 const CITY_STORAGE_KEY = 'op9d.city.v1';
 
@@ -213,10 +208,3 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 }));
 
-/** Convenience selector: the human player of the running match. */
-export function useHuman() {
-  const match = useGame((s) => s.match);
-  useGame((s) => s.tick);
-  if (!match) return null;
-  return match.players.find((p) => p.id === match.humanId) ?? null;
-}

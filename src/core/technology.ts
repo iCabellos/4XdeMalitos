@@ -107,10 +107,6 @@ export function visibleTechnologies(player: MatchPlayer): string[] {
   });
 }
 
-export function researchableTechnologies(player: MatchPlayer): string[] {
-  return TECHNOLOGY_IDS.filter((id) => checkTechnology(player, id).available);
-}
-
 /**
  * Research resolves instantly on payment. Nine days is too short for multi-day
  * research queues to read as anything but dead time.

@@ -163,8 +163,9 @@ export function MatchScreen() {
   };
 
   const tile = selectedHex ? match.tiles[selectedHex] : null;
-  const canCapture = !!army && !!match.tiles[army.hex]?.feature.gate ||
-    (!!army && !!match.tiles[army.hex]?.feature.facility);
+  // CAPTURAR acts on whatever the selected army is standing on.
+  const armyTile = army ? match.tiles[army.hex] : null;
+  const canCapture = !!armyTile && (!!armyTile.feature.gate || !!armyTile.feature.facility);
 
   return (
     <div className="screen">

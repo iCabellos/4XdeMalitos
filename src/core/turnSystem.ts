@@ -14,17 +14,16 @@
  *  10 mapUpdate     territory and fog recomputed
  *  11 dayEnd        scores update, victory conditions are checked
  */
-import { BALANCE } from '../data/balance';
 import { mapBuildingDef } from '../data/buildings.map';
 import { logEvent } from './events';
 import { growCitizens, runProduction, runUpkeep, gatherWithArmy } from './economy';
-import { computeMaxMovementPoints, isArmyEmpty, armySize } from './movement';
+import { computeMaxMovementPoints, isArmyEmpty } from './movement';
 import { resolveCombat } from './combat';
 import { tickObjectives } from './objectives';
 import { updateTerritory } from './territory';
 import { updateFog } from '../map/fogOfWar';
 import { updateAllScores, standings } from './scoring';
-import { armiesOf, createArmy, matchRng, playerById, saveRng } from './gameState';
+import { armiesOf, createArmy, playerById } from './gameState';
 import { enemyArmiesAt, openBuildingLockedRegions } from './actions';
 import type { MatchState, PlayerId } from './types';
 
@@ -300,9 +299,3 @@ export function finishMatch(
   logEvent(state, 'matchEnd', `FIN: ${name} ${reasonText}.`, { playerId: winner });
 }
 
-/** Total troops still standing, used by the results screen and tests. */
-export function totalArmyStrength(state: MatchState, playerId: PlayerId): number {
-  return armiesOf(state, playerId).reduce((sum, army) => sum + armySize(army), 0);
-}
-
-export { BALANCE, matchRng, saveRng };

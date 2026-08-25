@@ -144,10 +144,3 @@ export function facilityHexes(state: MatchState): string[] {
   );
 }
 
-export function objectiveLabel(objective: ObjectiveProgress): string {
-  return objectiveDef(objective.objectiveId).name;
-}
-
-export function objectiveDescription(objective: ObjectiveProgress): string {
-  return objectiveDef(objective.objectiveId).description;
-}

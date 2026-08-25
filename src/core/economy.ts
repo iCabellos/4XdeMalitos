@@ -10,7 +10,6 @@ import { extraCitizensFromTech } from './technology';
 import { availableTroops } from './technology';
 import type { Army, MatchPlayer, MatchState } from './types';
 import type { ResourceCost } from '../data/troops';
-import { armySize } from './movement';
 
 export interface ProductionLine {
   source: string;
@@ -196,13 +195,6 @@ export function growCitizens(player: MatchPlayer, starving: boolean): number {
   return 1;
 }
 
-export function citizenCap(player: MatchPlayer): number {
-  return Math.min(
-    BALANCE.citizens.max,
-    BALANCE.citizens.base + player.loadout.citizens + extraCitizensFromTech(player),
-  );
-}
-
 /** Resources an army scrapes directly off the hex it is standing on. */
 export function gatherWithArmy(
   state: MatchState,
@@ -315,10 +307,3 @@ export function armySlotCapacity(player: MatchPlayer): number {
   return 40 + player.loadout.cityTier * 25 + player.citizensTotal * 2;
 }
 
-export function totalTroops(state: MatchState, playerId: string): number {
-  let total = 0;
-  for (const army of Object.values(state.armies)) {
-    if (army.owner === playerId) total += armySize(army);
-  }
-  return total;
-}

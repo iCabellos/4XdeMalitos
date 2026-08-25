@@ -111,10 +111,3 @@ export function revealAll(player: MatchPlayer, state: MatchState): void {
   }
 }
 
-export function isVisible(player: MatchPlayer, hex: HexId): boolean {
-  return (player.fog[hex] ?? 0) === 2;
-}
-
-export function isExplored(player: MatchPlayer, hex: HexId): boolean {
-  return (player.fog[hex] ?? 0) >= 1;
-}

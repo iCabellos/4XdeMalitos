@@ -103,12 +103,6 @@ export function roundAxial(qf: number, rf: number): Axial {
   return { q, r };
 }
 
-/** Angle in radians of a hex around the map centre; used for fair spawn rings. */
-export function hexAngle(q: number, r: number): number {
-  const { x, z } = hexToWorld(q, r);
-  return Math.atan2(z, x);
-}
-
 /** Nearest hex to a point on a circle of `radius` rings at `angle` radians. */
 export function hexOnRing(angle: number, ringRadius: number): Axial {
   const world = { x: Math.cos(angle) * ringRadius * SQRT3, z: Math.sin(angle) * ringRadius * 1.5 };

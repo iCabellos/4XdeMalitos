@@ -10,6 +10,7 @@ import { findPath, moveCost, computeMaxMovementPoints, armyDomains, reachableHex
 import { resolveCombat, armyPower } from '../src/core/combat';
 import { buildAt, moveArmy, researchTechnology, trainTroops, captureGate, moveTowards } from '../src/core/actions';
 import { runProduction, runUpkeep, growCitizens } from '../src/core/economy';
+import { updateTerritory } from '../src/core/territory';
 import { TERRAINS } from '../src/data/terrain';
 import { BALANCE } from '../src/data/balance';
 import type { MatchState } from '../src/core/types';
@@ -339,6 +340,42 @@ describe('turn system', () => {
     for (const id of Object.keys(state.armies)) delete state.armies[id];
     endDay(state);
     expect(armiesOf(state, state.humanId).length).toBeGreaterThan(0);
+  });
+});
+
+describe('territory and elimination', () => {
+  it('lets an enemy army occupying a capital take control of it', () => {
+    const state = newMatch(1212);
+    const capital = state.tileOrder.find((id) => state.tiles[id].feature.startFor === 'p0')!;
+    updateTerritory(state);
+    expect(state.tiles[capital].controlledBy).toBe('p0');
+
+    // March a rival force onto the capital hex.
+    const invader = armiesOf(state, 'p1')[0];
+    invader.hex = capital;
+    updateTerritory(state);
+    expect(state.tiles[capital].controlledBy).toBe('p1');
+  });
+
+  it('eliminates a player who has lost armies, buildings and their capital', () => {
+    const state = newMatch(1313);
+    const capital = state.tileOrder.find((id) => state.tiles[id].feature.startFor === 'p0')!;
+    for (const army of armiesOf(state, 'p0')) delete state.armies[army.id];
+    const invader = armiesOf(state, 'p1')[0];
+    invader.hex = capital;
+
+    endDay(state);
+
+    expect(state.tiles[capital].controlledBy).toBe('p1');
+    expect(state.players.find((p) => p.id === 'p0')!.eliminated).toBe(true);
+  });
+
+  it('gives a wiped player a reserve levy while they still hold their capital', () => {
+    const state = newMatch(1414);
+    for (const army of armiesOf(state, 'p0')) delete state.armies[army.id];
+    endDay(state);
+    expect(armiesOf(state, 'p0').length).toBeGreaterThan(0);
+    expect(state.players.find((p) => p.id === 'p0')!.eliminated).toBe(false);
   });
 });
 
