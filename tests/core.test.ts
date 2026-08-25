@@ -1,18 +1,40 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMatch, armiesOf, humanPlayer } from '../src/core/gameState';
+import { createMatch, armiesOf, humanPlayer, createArmy } from '../src/core/gameState';
 import { startDay, endDay, simulateToEnd } from '../src/core/turnSystem';
 import { runBotTurn } from '../src/ai/botController';
 import { createNewCity, upgradeCityBuilding, canUpgradeCityBuilding, cityTier, upgradeTroop, canUpgradeTroop, awardCommanderXp } from '../src/entities/city';
 import { computeRewards, applyRewards } from '../src/core/rewards';
 import { canAfford, spend, grant, defaultStorage } from '../src/core/resources';
 import { emptyStock } from '../src/core/types';
-import { findPath, moveCost, computeMaxMovementPoints, armyDomains, reachableHexes } from '../src/core/movement';
+import { neighborIds } from '../src/map/hex';
+import {
+  findPath,
+  moveCost,
+  computeMaxMovementPoints,
+  armyDomains,
+  reachableHexes,
+  canCrossBetween,
+} from '../src/core/movement';
 import { resolveCombat, armyPower } from '../src/core/combat';
-import { buildAt, moveArmy, researchTechnology, trainTroops, captureGate, moveTowards } from '../src/core/actions';
+import {
+  buildAt,
+  moveArmy,
+  moveUnits,
+  moveTowards,
+  researchTechnology,
+  trainTroops,
+  holdGate,
+  activateFacility,
+  assaultObjective,
+  attackWithCommander,
+  claimItem,
+} from '../src/core/actions';
 import { runProduction, runUpkeep, growCitizens } from '../src/core/economy';
 import { updateTerritory } from '../src/core/territory';
 import { TERRAINS } from '../src/data/terrain';
 import { BALANCE } from '../src/data/balance';
+import { ZONES } from '../src/data/zones';
+import { ITEMS } from '../src/data/items';
 import type { MatchState } from '../src/core/types';
 
 function newMatch(seed = 12345): MatchState {
@@ -61,42 +83,37 @@ describe('movement', () => {
   it('charges terrain cost, and roads halve it on the same hex', () => {
     const state = newMatch();
     const army = armiesOf(state, state.humanId)[0];
-    // Compare the same hex with and without a road so nothing else differs.
+    const home = state.tiles[army.hex];
+    // Same region on both sides, so no wall is involved in the comparison.
     const tile = Object.values(state.tiles).find(
-      (t) =>
-        t.terrain === 'plains' &&
-        !t.road &&
-        !t.controlledBy &&
-        state.regions.find((r) => r.id === t.regionId)!.lock.type === 'none',
+      (t) => t.regionId === home.regionId && t.terrain === 'plains' && !t.road && !t.controlledBy,
     )!;
-    expect(moveCost(state, army, tile)).toBe(TERRAINS.plains.moveCost);
+    expect(moveCost(army, tile, tile)).toBe(TERRAINS.plains.moveCost);
     tile.road = true;
-    expect(moveCost(state, army, tile)).toBeLessThan(TERRAINS.plains.moveCost);
+    expect(moveCost(army, tile, tile)).toBeLessThan(TERRAINS.plains.moveCost);
   });
 
   it('charges a surcharge for entering enemy-controlled ground', () => {
     const state = newMatch();
     const army = armiesOf(state, state.humanId)[0];
+    const home = state.tiles[army.hex];
     const tile = Object.values(state.tiles).find(
-      (t) =>
-        t.terrain === 'plains' &&
-        !t.road &&
-        !t.controlledBy &&
-        state.regions.find((r) => r.id === t.regionId)!.lock.type === 'none',
+      (t) => t.regionId === home.regionId && t.terrain === 'plains' && !t.road && !t.controlledBy,
     )!;
-    const neutral = moveCost(state, army, tile);
+    const neutral = moveCost(army, tile, tile);
     tile.controlledBy = 'p1';
-    expect(moveCost(state, army, tile)).toBe(neutral + BALANCE.movement.enemyTerritorySurcharge);
+    expect(moveCost(army, tile, tile)).toBe(neutral + BALANCE.movement.enemyTerritorySurcharge);
   });
 
   it('treats water as impassable for a land force', () => {
     const state = newMatch();
     const army = armiesOf(state, state.humanId)[0];
+    const home = state.tiles[army.hex];
     const water = Object.values(state.tiles).find(
-      (t) => t.terrain === 'water' && state.regions.find((r) => r.id === t.regionId)!.lock.type === 'none',
+      (t) => t.terrain === 'water' && t.regionId === home.regionId,
     );
-    if (!water) return; // seed produced no water; nothing to assert
-    expect(moveCost(state, army, water)).toBe(Infinity);
+    if (!water) return; // this seed produced no water in the home sector
+    expect(moveCost(army, home, water)).toBe(Infinity);
   });
 
   it('reports the domains an army can traverse', () => {
@@ -125,25 +142,60 @@ describe('movement', () => {
     expect(army.hex).toBe(target);
   });
 
-  it('refuses to enter a locked region', () => {
+  it('refuses to cross a wall into another sector while its gate is sealed', () => {
     const state = newMatch();
     const army = armiesOf(state, state.humanId)[0];
     army.movementPoints = 999;
-    const core = state.regions.find((r) => r.kind === 'core')!;
-    const result = moveArmy(state, army.id, core.hexes[0]);
+    const home = state.tiles[army.hex];
+    const elsewhere = state.tileOrder.find((id) => state.tiles[id].regionId !== home.regionId)!;
+    const result = moveArmy(state, army.id, elsewhere);
     expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/bloqueada/i);
+    expect(result.reason).toMatch(/muro|puerta/i);
+  });
+
+  it('blocks a wall crossing even for a pure air formation', () => {
+    const state = newMatch();
+    const army = armiesOf(state, state.humanId)[0];
+    // An all-air army ignores terrain, but not walls.
+    army.composition = { drone: 10 };
+    army.movementPoints = 999;
+    const home = state.tiles[army.hex];
+    const other = Object.values(state.tiles).find((t) => t.regionId !== home.regionId)!;
+    expect(canCrossBetween(home, other)).toBe(false);
+    expect(moveCost(army, home, other)).toBe(Infinity);
+  });
+
+  it('allows the crossing once the gate on that boundary has opened', () => {
+    const state = newMatch();
+    const army = armiesOf(state, state.humanId)[0];
+    const home = state.tiles[army.hex];
+    // Find a real gate leading out of the home sector.
+    const gateHex = state.tileOrder.find((id) => {
+      const gate = state.tiles[id].feature.gate;
+      return !!gate && (gate.regionA === home.regionId || gate.regionB === home.regionId);
+    })!;
+    const gate = state.tiles[gateHex].feature.gate!;
+    const otherRegion = gate.regionA === home.regionId ? gate.regionB : gate.regionA;
+    const neighbourAcross = state.tileOrder.find((id) => {
+      const t = state.tiles[id];
+      if (t.regionId !== otherRegion) return false;
+      return neighborIds(t.q, t.r).includes(gateHex);
+    })!;
+
+    expect(canCrossBetween(state.tiles[gateHex], state.tiles[neighbourAcross])).toBe(false);
+    gate.open = true;
+    expect(canCrossBetween(state.tiles[gateHex], state.tiles[neighbourAcross])).toBe(true);
   });
 
   it('moveTowards makes partial progress when the target is out of reach', () => {
     const state = newMatch();
     const army = armiesOf(state, state.humanId)[0];
-    // Pick a far, legal hex in an unlocked region.
+    // Pick a far but legal hex inside our own sector.
+    const home = state.tiles[army.hex];
     const far = state.tileOrder.find((id) => {
       const tile = state.tiles[id];
-      const region = state.regions.find((r) => r.id === tile.regionId)!;
       return (
-        region.lock.type === 'none' &&
+        tile.regionId === home.regionId &&
         TERRAINS[tile.terrain].passableBy.includes('land') &&
         findPath(state, army, id).totalCost > army.movementPoints
       );
@@ -379,13 +431,12 @@ describe('territory and elimination', () => {
   });
 });
 
-describe('technology and regions', () => {
+describe('technology', () => {
   it('refuses research without the prerequisites', () => {
     const state = newMatch();
     const player = humanPlayer(state);
     player.stock.science = 9999;
-    const result = researchTechnology(state, player.id, 'armor_doctrine');
-    expect(result.ok).toBe(false);
+    expect(researchTechnology(state, player.id, 'armor_doctrine').ok).toBe(false);
   });
 
   it('unlocks a troop when its technology lands', () => {
@@ -396,32 +447,95 @@ describe('technology and regions', () => {
     expect(researchTechnology(state, player.id, 'combined_arms').ok).toBe(true);
     expect(player.modifiers.unlockedTroops).toContain('heavy_infantry');
   });
+});
 
-  it('opens the core region for the player who takes a gate', () => {
+describe('gates on a clock', () => {
+  it('opens zone-2 gates on their scheduled day, for everyone at once', () => {
+    const state = newMatch(2468);
+    const zone2Gates = () =>
+      state.tileOrder
+        .map((id) => state.tiles[id].feature.gate)
+        .filter((g) => g && Math.max(g.zoneA, g.zoneB) === 2);
+
+    expect(zone2Gates().every((g) => g!.open)).toBe(false);
+    while (state.day < ZONES[2].gatesOpenOnDay && !state.finished) endDay(state);
+    expect(state.day).toBe(ZONES[2].gatesOpenOnDay);
+    expect(zone2Gates().every((g) => g!.open)).toBe(true);
+  });
+
+  it('keeps the core sealed until its own later day', () => {
+    const state = newMatch(1357);
+    while (state.day < ZONES[2].gatesOpenOnDay && !state.finished) endDay(state);
+    const coreGates = state.tileOrder
+      .map((id) => state.tiles[id].feature.gate)
+      .filter((g) => g && Math.max(g.zoneA, g.zoneB) === 3);
+    expect(coreGates.length).toBeGreaterThan(0);
+    expect(coreGates.every((g) => g!.open)).toBe(false);
+  });
+
+  it('lets an army hold a gate without that opening it', () => {
     const state = newMatch();
     const player = humanPlayer(state);
     const army = armiesOf(state, player.id)[0];
     const gateHex = state.tileOrder.find((id) => state.tiles[id].feature.gate)!;
     army.hex = gateHex;
-    expect(player.unlockedRegions).not.toContain(0);
-    expect(captureGate(state, army.id).ok).toBe(true);
-    expect(player.unlockedRegions).toContain(0);
+    const gate = state.tiles[gateHex].feature.gate!;
+    expect(holdGate(state, army.id).ok).toBe(true);
+    expect(gate.controlledBy).toBe(player.id);
+    expect(gate.open).toBe(false);
+  });
+});
+
+describe('objectives and items', () => {
+  it('needs a real army to clear a garrison, and pays an item when it does', () => {
+    const state = newMatch(4242);
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    const hex = state.tileOrder.find((id) => state.tiles[id].feature.secondaryObjective)!;
+    const objective = state.tiles[hex].feature.secondaryObjective!;
+    army.hex = hex;
+
+    // A token force loses and claims nothing.
+    army.composition = { infantry: 2 };
+    army.actedThisDay = false;
+    assaultObjective(state, army.id);
+    expect(objective.defeatedBy).toBeNull();
+    expect(player.items).toHaveLength(0);
+
+    // A real army clears it and takes the item.
+    const winner = createArmy(state, player, hex, 'Fuerza de asalto');
+    winner.composition = { tank: 80, heavy_infantry: 60, artillery: 40 };
+    winner.actedThisDay = false;
+    player.stock.ammo = 999;
+    const result = assaultObjective(state, winner.id);
+    expect(result.ok).toBe(true);
+    expect(objective.defeatedBy).toBe(player.id);
+    expect(player.items).toContain(objective.itemId);
   });
 
-  it('lets a player enter the core only after the gate is taken', () => {
+  it('applies an item buff to the player modifiers, and never stacks it twice', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const before = player.modifiers.attackMultiplier;
+    claimItem(state, player.id, 'targeting_suite');
+    const after = player.modifiers.attackMultiplier;
+    expect(after).toBeGreaterThan(before);
+    claimItem(state, player.id, 'targeting_suite');
+    expect(player.modifiers.attackMultiplier).toBe(after);
+    expect(player.items.filter((i) => i === 'targeting_suite')).toHaveLength(1);
+  });
+
+  it('awards the legendary core item for conquering the centre', () => {
     const state = newMatch();
     const player = humanPlayer(state);
     const army = armiesOf(state, player.id)[0];
-    const core = state.regions.find((r) => r.kind === 'core')!;
-    army.movementPoints = 999;
-    expect(moveArmy(state, army.id, core.hexes[0]).ok).toBe(false);
-    player.unlockedRegions.push(0);
-    const inCore = core.hexes.find((h) => TERRAINS[state.tiles[h].terrain].passableBy.includes('land'))!;
-    army.hex = state.tileOrder.find(
-      (id) => state.tiles[id].regionId !== 0 && TERRAINS[state.tiles[id].terrain].passableBy.includes('land'),
-    )!;
-    army.movementPoints = 999;
-    expect(moveArmy(state, army.id, inCore).ok).toBe(true);
+    const core = state.tileOrder.find((id) => state.tiles[id].feature.mainObjective)!;
+    army.hex = core;
+    player.stock.energy = 500;
+    // activateFacility on the core hex is the conquest.
+    expect(activateFacility(state, army.id).ok).toBe(true);
+    expect(player.items).toContain('core_of_x');
+    expect(ITEMS.core_of_x.rarity).toBe('legendario');
   });
 });
 
@@ -515,6 +629,64 @@ describe('metaprogression', () => {
   });
 });
 
+describe('orders', () => {
+  it('moves the whole army when every unit is selected, keeping its identity', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    const before = Object.keys(state.armies).length;
+    const target = Object.keys(reachableHexes(state, army))[0];
+    const result = moveUnits(state, player.id, army.id, { ...army.composition }, target);
+    expect(result.ok).toBe(true);
+    expect(Object.keys(state.armies)).toHaveLength(before);
+    expect(state.armies[army.id].hex).toBe(target);
+  });
+
+  it('splits a detachment when only some units are selected', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    army.composition = { infantry: 10, recon: 4 };
+    const before = Object.keys(state.armies).length;
+    const target = Object.keys(reachableHexes(state, army))[0];
+    const result = moveUnits(state, player.id, army.id, { recon: 2 }, target);
+    expect(result.ok).toBe(true);
+    expect(result.detail?.detached).toBe(true);
+    expect(Object.keys(state.armies)).toHaveLength(before + 1);
+    // The parent keeps the rest.
+    expect(state.armies[army.id].composition.recon).toBe(2);
+    expect(state.armies[army.id].composition.infantry).toBe(10);
+  });
+
+  it('refuses to move units the army does not have', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    const target = Object.keys(reachableHexes(state, army))[0];
+    expect(moveUnits(state, player.id, army.id, { tank: 99 }, target).ok).toBe(false);
+  });
+
+  it('puts the named commander in charge before attacking with them', () => {
+    const state = newMatch(999);
+    const player = humanPlayer(state);
+    player.commanders = ['marcus', 'koval'];
+    const army = armiesOf(state, player.id)[0];
+    army.commanderId = 'marcus';
+    army.composition = { infantry: 40 };
+
+    const enemy = armiesOf(state, 'p1')[0];
+    // Melee range is one hex, so the target has to be a neighbour.
+    const home = state.tiles[army.hex];
+    const target = neighborIds(home.q, home.r).find((id) => state.tiles[id])!;
+    enemy.hex = target;
+    enemy.composition = { infantry: 5 };
+
+    const result = attackWithCommander(state, player.id, army.id, target, 'koval');
+    expect(result.ok).toBe(true);
+    expect(state.armies[army.id]?.commanderId).toBe('koval');
+  });
+});
+
 describe('match setup', () => {
   it('creates five participants: one human and four distinct bots', () => {
     const state = newMatch();
@@ -538,6 +710,18 @@ describe('match setup', () => {
     const player = humanPlayer(state);
     const hidden = state.tileOrder.filter((id) => (player.fog[id] ?? 0) === 0).length;
     expect(hidden).toBeGreaterThan(state.tileOrder.length * 0.5);
+  });
+
+  it('starts each player sealed inside their own sector', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    const home = state.tiles[army.hex];
+    expect(player.homeRegion).toBe(home.regionId);
+    // Everything reachable on day one is inside the home sector.
+    for (const hex of Object.keys(reachableHexes(state, army))) {
+      expect(state.tiles[hex].regionId).toBe(home.regionId);
+    }
   });
 
   it('trains troops only where the player has a base', () => {

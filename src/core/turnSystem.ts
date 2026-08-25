@@ -24,7 +24,7 @@ import { updateTerritory } from './territory';
 import { updateFog } from '../map/fogOfWar';
 import { updateAllScores, standings } from './scoring';
 import { armiesOf, createArmy, playerById } from './gameState';
-import { enemyArmiesAt, openBuildingLockedRegions } from './actions';
+import { enemyArmiesAt } from './actions';
 import type { MatchState, PlayerId } from './types';
 
 export type BotRunner = (state: MatchState, botId: PlayerId) => void;
@@ -57,6 +57,8 @@ export function startDay(state: MatchState): void {
       hex: capital,
     });
   }
+
+  openScheduledGates(state);
 
   state.phase = 'production';
   for (const player of state.players) {
@@ -148,7 +150,6 @@ export function endDay(state: MatchState, runBot?: BotRunner): void {
   state.phase = 'mapUpdate';
   updateTerritory(state);
   updateFog(state);
-  for (const player of state.players) openBuildingLockedRegions(state, player.id);
 
   state.phase = 'dayEnd';
   accumulateCommanderXp(state);
@@ -186,6 +187,29 @@ export function simulateToEnd(state: MatchState, runBot?: BotRunner): void {
   while (!state.finished && guard < 100) {
     advanceDay(state, runBot);
     guard++;
+  }
+}
+
+/**
+ * Gates run on a clock, not on conquest: every player faces the same schedule,
+ * which is what turns the nine days into three distinct acts.
+ */
+function openScheduledGates(state: MatchState): void {
+  const openedZones = new Set<number>();
+  for (const id of state.tileOrder) {
+    const gate = state.tiles[id].feature.gate;
+    if (!gate || gate.open) continue;
+    if (state.day < gate.opensOnDay) continue;
+    gate.open = true;
+    openedZones.add(Math.max(gate.zoneA, gate.zoneB));
+  }
+  for (const zone of [...openedZones].sort()) {
+    logEvent(
+      state,
+      'gate',
+      `Las puertas hacia la Zona ${zone} se abren. El acceso queda libre para todos.`,
+      { visibleToHuman: true },
+    );
   }
 }
 

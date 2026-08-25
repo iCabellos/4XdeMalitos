@@ -3,6 +3,7 @@ import type { TerrainId } from '../data/terrain';
 import type { AnyMatchResourceId } from '../data/resources';
 import type { MapBuildingId } from '../data/buildings.map';
 import type { ObjectiveGoal } from '../data/objectives';
+import type { ZoneId } from '../data/zones';
 
 export type PlayerId = string;
 
@@ -16,6 +17,13 @@ export interface ResourceNodeInstance {
   nodeId: string;
   /** Remaining extractable amount. Depleted nodes stop yielding. */
   remaining: number;
+  /**
+   * Yield multiplier for this particular deposit. It is what separates an
+   * abundant zone-1 field from a very abundant zone-2 one, and a thin zone-2
+   * rare seam from the rich veins in the core, without needing a node type per
+   * combination.
+   */
+  richness: number;
 }
 
 export interface MapBuildingInstance {
@@ -34,13 +42,47 @@ export interface MapBuildingInstance {
 
 export type FacilityState = 'inactive' | 'active';
 
+/**
+ * A doorway through the wall between two regions. Gates are the only way to
+ * cross a zone boundary, and they open on a fixed day rather than being
+ * captured, so every player faces the same clock.
+ */
+export interface GateFeature {
+  id: string;
+  /** The two regions this gate joins. */
+  regionA: number;
+  regionB: number;
+  /** The two zones this gate joins, for UI and AI reasoning. */
+  zoneA: ZoneId;
+  zoneB: ZoneId;
+  /** Day the gate unseals. Before it, nothing crosses here. */
+  opensOnDay: number;
+  open: boolean;
+  /** Who currently holds the doorway; flavour and score, not access. */
+  controlledBy: PlayerId | null;
+}
+
+/**
+ * A zone-2 encounter: a garrison that must be defeated to claim its item and
+ * the buff that comes with it.
+ */
+export interface SecondaryObjectiveFeature {
+  id: string;
+  name: string;
+  itemId: string;
+  /** Defending force, resolved through the normal combat system. */
+  garrison: Record<string, number>;
+  defeatedBy: PlayerId | null;
+}
+
 export interface TileFeature {
-  /** Strategic gate guarding a region. */
-  gate?: { regionId: number; controlledBy: PlayerId | null };
-  /** Secondary/main objective facility. */
+  gate?: GateFeature;
+  /** Strategic facility (activation objective). */
   facility?: { id: string; name: string; state: FacilityState; owner: PlayerId | null };
-  /** The main objective hex. */
+  /** The core objective hex at the centre of zone 3. */
   mainObjective?: boolean;
+  /** Garrisoned encounter awarding an item and a match-long buff. */
+  secondaryObjective?: SecondaryObjectiveFeature;
   /** Start position of a participant. */
   startFor?: PlayerId;
   /** Abandoned base: a one-off cache of resources for whoever reaches it first. */
@@ -53,6 +95,10 @@ export interface Tile {
   r: number;
   terrain: TerrainId;
   regionId: number;
+  /** Which of the three concentric zones this hex belongs to. */
+  zone: ZoneId;
+  /** Ring distance from the map centre; drives zone and sector assignment. */
+  ring: number;
   road: boolean;
   node: ResourceNodeInstance | null;
   feature: TileFeature;
@@ -62,20 +108,19 @@ export interface Tile {
   buildingId: string | null;
 }
 
-export type RegionLock =
-  | { type: 'none' }
-  | { type: 'gate'; gateHexes: HexId[] }
-  | { type: 'tech'; techId: string }
-  | { type: 'resource'; cost: Partial<Stock> }
-  | { type: 'building'; buildingId: MapBuildingId };
-
+/**
+ * A walled sector. Every boundary between two regions is a wall that no domain
+ * crosses - ground, naval or air - and the only openings are gate hexes.
+ */
 export interface Region {
   id: number;
   name: string;
-  kind: 'start' | 'field' | 'core' | 'restricted';
-  lock: RegionLock;
+  zone: ZoneId;
+  /** Index of the sector within its zone. */
+  sector: number;
   hexes: HexId[];
-  /** Designer-facing note used by the UI. */
+  /** Region ids reachable from here, each through at least one gate. */
+  connections: number[];
   blurb: string;
 }
 
@@ -154,8 +199,8 @@ export interface MatchPlayer {
   technologies: string[];
   /** Troop levels for this match, seeded from the city. */
   troopLevels: Record<string, number>;
-  /** Regions this player may enter. */
-  unlockedRegions: number[];
+  /** Items claimed this match, each granting a permanent in-match buff. */
+  items: string[];
   /** Fog per hex. */
   fog: Record<HexId, FogLevel>;
   /** Bonuses derived from the city + in-match techs, recomputed on change. */
@@ -170,6 +215,8 @@ export interface MatchPlayer {
   eliminated: boolean;
   /** Bots this player has a non-aggression understanding with. */
   nonAggression: PlayerId[];
+  /** Region id this player spawned in. */
+  homeRegion: number;
   /** Running per-match statistics used by the results screen. */
   stats: {
     hexesControlled: number;
@@ -181,6 +228,7 @@ export interface MatchPlayer {
     resourcesGathered: number;
     rareGathered: number;
     techsResearched: number;
+    objectivesCleared: number;
   };
 }
 

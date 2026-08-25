@@ -4,8 +4,25 @@ import { isRare } from '../data/resources';
 import { armyPower } from '../core/combat';
 import { armySize } from '../core/movement';
 import { findMainObjectiveHex } from '../core/objectives';
+import { ZONES } from '../data/zones';
 import type { Army, MatchPlayer, MatchState } from '../core/types';
 import type { StrategyWeights } from './strategies';
+
+/**
+ * Whether two regions are joined by a gate that has already opened. Regions are
+ * few, so a direct scan beats maintaining a graph that could fall out of date.
+ */
+function regionReachable(state: MatchState, fromRegion: number, toRegion: number): boolean {
+  for (const id of state.tileOrder) {
+    const gate = state.tiles[id].feature.gate;
+    if (!gate || !gate.open) continue;
+    const joins =
+      (gate.regionA === fromRegion && gate.regionB === toRegion) ||
+      (gate.regionB === fromRegion && gate.regionA === toRegion);
+    if (joins) return true;
+  }
+  return false;
+}
 
 export interface ScoredHex {
   hex: HexId;
@@ -38,11 +55,13 @@ export function scoreDestination(
   const tile = state.tiles[hex];
   if (!tile) return { hex, score: -Infinity, reason: 'fuera del mapa' };
 
-  // Never score ground we are not allowed to enter: it would drown out every
-  // legal option and leave the army standing still.
-  const region = state.regions.find((r) => r.id === tile.regionId);
-  if (region && region.lock.type !== 'none' && !player.unlockedRegions.includes(region.id)) {
-    return { hex, score: -Infinity, reason: 'region bloqueada' };
+  // Ground behind a sealed wall is unreachable, and scoring it would drown out
+  // every legal option and leave the army standing still. Reachability itself
+  // is settled by the pathfinder; this only skips other regions we cannot yet
+  // cross into at all.
+  const origin = state.tiles[army.hex];
+  if (tile.regionId !== origin.regionId && !regionReachable(state, origin.regionId, tile.regionId)) {
+    return { hex, score: -Infinity, reason: 'muro sellado' };
   }
 
   let score = 0;
@@ -68,10 +87,31 @@ export function scoreDestination(
     }
   }
 
-  // Gates open the core; the core holds the match.
-  if (tile.feature.gate && !player.unlockedRegions.includes(tile.feature.gate.regionId)) {
-    score += weights.objective * 22;
-    reason = 'tomar una puerta';
+  // Gates are the only doorways. Sitting on one before it opens is how a bot
+  // is through the instant it does.
+  const gate = tile.feature.gate;
+  if (gate) {
+    const daysAway = gate.opensOnDay - state.day;
+    if (gate.open) {
+      score += weights.objective * 14;
+      reason = 'cruzar la puerta';
+    } else if (daysAway <= 2) {
+      score += weights.objective * 18;
+      reason = `esperar la puerta (dia ${gate.opensOnDay})`;
+    }
+  }
+
+  // Garrisoned objectives are worth a real army: they pay an item and a buff.
+  const secondary = tile.feature.secondaryObjective;
+  if (secondary && !secondary.defeatedBy) {
+    const garrison = Object.values(secondary.garrison).reduce((a, b) => a + b, 0);
+    const mine = armySize(army);
+    if (mine > garrison * 1.4) {
+      score += weights.objective * 26;
+      reason = `asaltar ${secondary.name}`;
+    } else {
+      score -= weights.caution * 8;
+    }
   }
 
   // Facilities and the central objective.
@@ -84,10 +124,13 @@ export function scoreDestination(
   }
 
   const mainHex = findMainObjectiveHex(state);
-  if (mainHex && player.unlockedRegions.includes(state.tiles[mainHex].regionId)) {
-    // Once the core is open, gravity pulls towards the centre.
-    const distanceToMain = hexDistanceId(hex, mainHex);
-    score += weights.objective * Math.max(0, 8 - distanceToMain);
+  if (mainHex && state.tiles[mainHex].zone === 3) {
+    // Once the core gates are open, gravity pulls towards the centre.
+    const coreOpen = state.day >= ZONES[3].gatesOpenOnDay;
+    if (coreOpen) {
+      const distanceToMain = hexDistanceId(hex, mainHex);
+      score += weights.objective * Math.max(0, 8 - distanceToMain);
+    }
   }
 
   // Untaken caches are free tempo.

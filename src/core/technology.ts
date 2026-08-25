@@ -1,9 +1,10 @@
 import { TECHNOLOGIES, TECHNOLOGY_IDS, techDef } from '../data/technologies';
-import { defaultModifiers, type MatchPlayer, type MatchState, type PlayerModifiers } from './types';
+import { defaultModifiers, type MatchPlayer, type PlayerModifiers } from './types';
 import { canAfford, missingResources, spend, defaultStorage } from './resources';
 import type { ResourceCost } from '../data/troops';
 import { ALL_MATCH_RESOURCE_IDS, isRare } from '../data/resources';
 import { BALANCE } from '../data/balance';
+import { itemDef } from '../data/items';
 import { TROOP_IDS, troopDef } from '../data/troops';
 import { MAP_BUILDING_IDS, mapBuildingDef } from '../data/buildings.map';
 
@@ -27,6 +28,19 @@ export function recomputeModifiers(player: MatchPlayer): void {
     unlockedTroops: [...base.unlockedTroops],
     unlockedBuildings: [...base.unlockedBuildings],
   };
+
+  // Items won from objectives buff the rest of the run, so they are folded in
+  // here alongside research: modifiers stay a pure function of what is owned.
+  for (const itemId of player.items) {
+    const effects = itemDef(itemId).effects;
+    mods.attackMultiplier *= effects.attackMultiplier ?? 1;
+    mods.defenseMultiplier *= effects.defenseMultiplier ?? 1;
+    mods.productionMultiplier *= effects.productionMultiplier ?? 1;
+    mods.gatherMultiplier *= effects.gatherMultiplier ?? 1;
+    mods.rareYieldMultiplier *= effects.rareYieldMultiplier ?? 1;
+    mods.movementBonus += effects.movementBonus ?? 0;
+    mods.visionBonus += effects.visionBonus ?? 0;
+  }
 
   for (const techId of player.technologies) {
     const effects = techDef(techId).effects;
@@ -111,7 +125,7 @@ export function visibleTechnologies(player: MatchPlayer): string[] {
  * Research resolves instantly on payment. Nine days is too short for multi-day
  * research queues to read as anything but dead time.
  */
-export function research(state: MatchState, player: MatchPlayer, techId: string): boolean {
+export function research(player: MatchPlayer, techId: string): boolean {
   const check = checkTechnology(player, techId);
   if (!check.available) return false;
   const def = techDef(techId);
@@ -119,15 +133,6 @@ export function research(state: MatchState, player: MatchPlayer, techId: string)
   player.technologies.push(techId);
   player.stats.techsResearched++;
   recomputeModifiers(player);
-
-  // Region locks of type 'tech' open the instant the technology lands.
-  if (def.effects.opensRegionLock) {
-    for (const region of state.regions) {
-      if (region.lock.type === 'tech' && !player.unlockedRegions.includes(region.id)) {
-        player.unlockedRegions.push(region.id);
-      }
-    }
-  }
   return true;
 }
 

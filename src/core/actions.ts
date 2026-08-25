@@ -15,18 +15,20 @@ import {
   armyDomains,
   armySize,
   canEnterTile,
+  canOccupyTile,
   computeMaxMovementPoints,
   findPath,
   isArmyEmpty,
   reachableAlongPath,
   reachableHexes,
 } from './movement';
-import { research } from './technology';
+import { recomputeModifiers, research } from './technology';
+import { itemDef, CORE_ITEM, type ItemDefinition } from '../data/items';
 import { updateFogForPlayer } from '../map/fogOfWar';
 import { updateTerritory } from './territory';
 import { createArmy, countArmies, playerById } from './gameState';
 import { grantMany } from './resources';
-import type { Army, MatchState, PlayerId } from './types';
+import type { Army, MatchState, PlayerId, Tile } from './types';
 
 export interface ActionResult {
   ok: boolean;
@@ -63,14 +65,12 @@ export function moveArmy(state: MatchState, armyId: string, target: HexId): Acti
 
   const destination = state.tiles[target];
   if (!destination) return fail('Hexagono fuera del mapa');
-  if (!canEnterTile(state, army, destination)) {
-    const region = state.regions.find((r) => r.id === destination.regionId);
-    if (region && region.lock.type !== 'none') return fail(`Region bloqueada: ${region.name}`);
+  if (!canOccupyTile(army, destination)) {
     return fail('Terreno intransitable para esta composicion');
   }
 
   const path = findPath(state, army, target);
-  if (!path.reachable) return fail('Sin ruta disponible');
+  if (!path.reachable) return fail(wallReason(state, army, destination));
 
   const limit = reachableAlongPath(path, army.movementPoints);
   if (limit < 0) return fail('Demasiado lejos para este dia');
@@ -234,7 +234,9 @@ export function captureHex(state: MatchState, armyId: string, target: HexId): Ac
   if (!tile) return fail('Hexagono fuera del mapa');
   if (hexDistanceId(army.hex, target) > 1) return fail('Debes estar adyacente');
   if (enemyArmiesAt(state, target, army.owner).length > 0) return fail('Defendido: usa ATACAR');
-  if (!canEnterTile(state, army, tile)) return fail('No puedes entrar en ese hexagono');
+  if (!canEnterTile(army, state.tiles[army.hex], tile)) {
+    return fail(wallReason(state, army, tile));
+  }
   if (army.movementPoints < 1) return fail('Sin puntos de movimiento');
 
   army.movementPoints -= 1;
@@ -260,31 +262,150 @@ function takeHexOwnership(state: MatchState, hex: HexId, playerId: PlayerId): vo
 }
 
 /**
- * Takes a gate, which unlocks the region it guards for the capturing player.
- * This is the primary way into the locked core.
+ * Explains why there is no route, which on this map is almost always a wall.
+ * A player who cannot see the reason reads it as a bug.
  */
-export function captureGate(state: MatchState, armyId: string): ActionResult {
+function wallReason(state: MatchState, army: Army, destination: Tile): string {
+  const origin = state.tiles[army.hex];
+  if (origin.regionId === destination.regionId) return 'Sin ruta disponible';
+  const region = state.regions.find((r) => r.id === destination.regionId);
+  const sealed = state.tileOrder.some((id) => {
+    const gate = state.tiles[id].feature.gate;
+    if (!gate || gate.open) return false;
+    return (
+      (gate.regionA === destination.regionId || gate.regionB === destination.regionId) &&
+      (gate.regionA === origin.regionId || gate.regionB === origin.regionId)
+    );
+  });
+  if (sealed) {
+    const day = nextGateDay(state, origin.regionId, destination.regionId);
+    return day
+      ? `Muro sellado: la puerta hacia ${region?.name ?? 'esa region'} abre el dia ${day}`
+      : `Muro sellado hacia ${region?.name ?? 'esa region'}`;
+  }
+  return `No hay puerta desde aqui hacia ${region?.name ?? 'esa region'}`;
+}
+
+/** Day the first gate between two regions opens, if one exists. */
+export function nextGateDay(state: MatchState, regionA: number, regionB: number): number | null {
+  let soonest: number | null = null;
+  for (const id of state.tileOrder) {
+    const gate = state.tiles[id].feature.gate;
+    if (!gate) continue;
+    const joins =
+      (gate.regionA === regionA && gate.regionB === regionB) ||
+      (gate.regionB === regionA && gate.regionA === regionB);
+    if (!joins) continue;
+    if (soonest === null || gate.opensOnDay < soonest) soonest = gate.opensOnDay;
+  }
+  return soonest;
+}
+
+/**
+ * Holding a gate does not open it - gates run on a clock every player shares -
+ * but it marks the doorway as yours, which is worth score and denies the enemy
+ * a clean crossing.
+ */
+export function holdGate(state: MatchState, armyId: string): ActionResult {
   const army = armyOf(state, armyId);
   if (!army) return fail('Ejercito inexistente');
   const tile = state.tiles[army.hex];
   const gate = tile?.feature.gate;
   if (!gate) return fail('No hay ninguna puerta en este hexagono');
   const player = playerById(state, army.owner);
-  if (gate.controlledBy === player.id && player.unlockedRegions.includes(gate.regionId)) {
-    return fail('Ya controlas esta puerta');
-  }
+  if (gate.controlledBy === player.id) return fail('Ya controlas esta puerta');
   gate.controlledBy = player.id;
-  if (!player.unlockedRegions.includes(gate.regionId)) {
-    player.unlockedRegions.push(gate.regionId);
-  }
-  const region = state.regions.find((r) => r.id === gate.regionId);
-  logEvent(state, 'gate', `${player.name} toma una puerta y abre ${region?.name ?? 'una region'}.`, {
-    playerId: player.id,
-    hex: army.hex,
-  });
+  takeHexOwnership(state, army.hex, player.id);
+  logEvent(
+    state,
+    'gate',
+    gate.open
+      ? `${player.name} toma el control de una puerta abierta.`
+      : `${player.name} se posiciona en una puerta: abre el dia ${gate.opensOnDay}.`,
+    { playerId: player.id, hex: army.hex },
+  );
   army.lastOrder = { type: 'capture', target: army.hex };
   updateTerritory(state);
-  return ok({ regionId: gate.regionId });
+  return ok({ gateId: gate.id, opensOnDay: gate.opensOnDay });
+}
+
+/**
+ * Assaults a garrisoned zone-2 objective. This is a real battle against a
+ * defending force, not a capture: win it and the item and its match-long buff
+ * are yours.
+ */
+export function assaultObjective(state: MatchState, armyId: string): ActionResult {
+  const army = armyOf(state, armyId);
+  if (!army) return fail('Ejercito inexistente');
+  if (army.actedThisDay) return fail('Este ejercito ya ha combatido hoy');
+  const tile = state.tiles[army.hex];
+  const objective = tile?.feature.secondaryObjective;
+  if (!objective) return fail('No hay objetivo secundario en este hexagono');
+  if (objective.defeatedBy) return fail('Ya ha sido derrotado');
+
+  const player = playerById(state, army.owner);
+
+  // The garrison fights as a real army so terrain, commander and composition
+  // all matter exactly as they would against a player.
+  const garrison: Army = {
+    id: `garrison_${objective.id}`,
+    name: objective.name,
+    owner: '__garrison__',
+    hex: army.hex,
+    commanderId: null,
+    composition: { ...objective.garrison },
+    movementPoints: 0,
+    maxMovementPoints: 0,
+    actedThisDay: true,
+    lastOrder: null,
+  };
+
+  const outcome = resolveCombat(state, army, garrison, tile);
+  army.actedThisDay = true;
+  state.combatLog.push(outcome.report);
+
+  // Whatever survived a failed assault stays as the garrison, so a beaten
+  // attacker still softens the position for whoever comes next.
+  objective.garrison = { ...garrison.composition };
+
+  // Winning the battle takes the position. Requiring the garrison to be wiped
+  // to the last man would make these objectives unclaimable, because combat
+  // caps casualties at 90% per battle by design.
+  if (outcome.report.winner !== player.id) {
+    logEvent(state, 'combat', `${player.name} fracasa al asaltar ${objective.name}.`, {
+      playerId: player.id,
+      hex: army.hex,
+    });
+    if (outcome.attackerDestroyed) delete state.armies[army.id];
+    return ok({ cleared: false, report: outcome.report });
+  }
+
+  objective.defeatedBy = player.id;
+  player.stats.objectivesCleared++;
+  const item = claimItem(state, player.id, objective.itemId);
+  takeHexOwnership(state, army.hex, player.id);
+  logEvent(
+    state,
+    'objective',
+    `${player.name} arrasa ${objective.name} y se lleva ${item?.name ?? 'un item'}.`,
+    { playerId: player.id, hex: army.hex },
+  );
+  updateTerritory(state);
+  return ok({ cleared: true, itemId: objective.itemId, report: outcome.report });
+}
+
+/**
+ * Grants an item and its buff. Modifiers are recomputed rather than nudged, so
+ * claiming the same item twice can never stack.
+ */
+export function claimItem(state: MatchState, playerId: PlayerId, itemId: string): ItemDefinition | null {
+  const player = playerById(state, playerId);
+  if (player.items.includes(itemId)) return null;
+  const def = itemDef(itemId);
+  player.items.push(itemId);
+  recomputeModifiers(player);
+  if (def.effects.grant) grantMany(player, def.effects.grant as Record<string, number>);
+  return def;
 }
 
 /** Activates a strategic facility. Costs energy and needs an army on the hex. */
@@ -308,8 +429,21 @@ export function activateFacility(state: MatchState, armyId: string): ActionResul
     playerId: player.id,
     hex: army.hex,
   });
+
+  // Taking the core is the single biggest prize on the map.
+  let claimed: ItemDefinition | null = null;
+  if (tile.feature.mainObjective) {
+    claimed = claimItem(state, player.id, CORE_ITEM);
+    if (claimed) {
+      logEvent(state, 'objective', `${player.name} conquista el Nucleo y obtiene ${claimed.name}.`, {
+        playerId: player.id,
+        hex: army.hex,
+      });
+    }
+  }
+
   updateTerritory(state);
-  return ok({ facility: facility.id });
+  return ok({ facility: facility.id, itemId: claimed?.id });
 }
 
 /** Hand-gathering from the hex an army occupies. */
@@ -340,9 +474,6 @@ export function buildAt(
   if (!id) return fail('Construccion fallida');
   const def = mapBuildingDef(buildingId);
   logEvent(state, 'build', `${player.name} inicia ${def.name} en ${hex}.`, { playerId, hex });
-
-  // A region locked behind a building opens as soon as one stands adjacent.
-  openBuildingLockedRegions(state, playerId);
   updateTerritory(state);
   return ok({ buildingInstanceId: id, days: def.buildDays });
 }
@@ -366,33 +497,13 @@ export function upgradeMapBuilding(
   return ok({ level: instance.level });
 }
 
-/** Regions gated by a building open once the player has one adjacent to them. */
-export function openBuildingLockedRegions(state: MatchState, playerId: PlayerId): void {
-  const player = playerById(state, playerId);
-  for (const region of state.regions) {
-    if (region.lock.type !== 'building') continue;
-    if (player.unlockedRegions.includes(region.id)) continue;
-    const required = region.lock.buildingId;
-    const hasAdjacent = Object.values(state.buildings).some((b) => {
-      if (b.owner !== playerId || b.buildingId !== required || b.daysRemaining > 0) return false;
-      return region.hexes.some((hex) => hexDistanceId(hex, b.hex) <= 1);
-    });
-    if (hasAdjacent) {
-      player.unlockedRegions.push(region.id);
-      logEvent(state, 'region', `${player.name} abre ${region.name} con un puesto avanzado.`, {
-        playerId,
-      });
-    }
-  }
-}
-
 export function researchTechnology(
   state: MatchState,
   playerId: PlayerId,
   techId: string,
 ): ActionResult {
   const player = playerById(state, playerId);
-  if (!research(state, player, techId)) return fail('No se puede investigar ahora');
+  if (!research(player, techId)) return fail('No se puede investigar ahora');
   logEvent(state, 'research', `${player.name} completa la investigacion ${techId}.`, { playerId });
   return ok({ techId });
 }
@@ -503,6 +614,72 @@ export function effectiveArmySlots(state: MatchState, playerId: PlayerId): numbe
     }
   }
   return slots;
+}
+
+/**
+ * Moves only the units the player picked.
+ *
+ * Sending the whole army is the common case, so a full selection moves the
+ * army itself and keeps its identity and commander. A partial selection peels
+ * off a detachment first, which is what makes "move these three scouts" a real
+ * order rather than a UI illusion.
+ */
+export function moveUnits(
+  state: MatchState,
+  playerId: PlayerId,
+  armyId: string,
+  composition: Record<string, number>,
+  target: HexId,
+): ActionResult {
+  const source = armyOf(state, armyId);
+  if (!source || source.owner !== playerId) return fail('Ejercito invalido');
+
+  const selected = Object.entries(composition).filter(([, count]) => count > 0);
+  if (selected.length === 0) return fail('Selecciona al menos una unidad');
+
+  let movesEverything = true;
+  for (const [troopId, count] of selected) {
+    const available = source.composition[troopId] ?? 0;
+    if (count > available) return fail(`No tienes ${count} de ${troopDef(troopId).name}`);
+  }
+  for (const [troopId, available] of Object.entries(source.composition)) {
+    if (available <= 0) continue;
+    if ((composition[troopId] ?? 0) < available) {
+      movesEverything = false;
+      break;
+    }
+  }
+
+  if (movesEverything) return moveArmy(state, armyId, target);
+
+  if (countArmies(state, playerId) >= effectiveArmySlots(state, playerId)) {
+    return fail('Sin plazas de ejercito para formar un destacamento');
+  }
+  const split = splitArmy(state, playerId, armyId, composition);
+  if (!split.ok) return split;
+  const detachmentId = split.detail?.armyId as string;
+  const result = moveArmy(state, detachmentId, target);
+  return result.ok ? ok({ ...result.detail, armyId: detachmentId, detached: true }) : result;
+}
+
+/**
+ * Attacks with a named commander. If they are leading another formation they
+ * are reassigned first, so "attack with Koval" always means what it says.
+ */
+export function attackWithCommander(
+  state: MatchState,
+  playerId: PlayerId,
+  armyId: string,
+  target: HexId,
+  commanderId: string | null,
+): ActionResult {
+  const army = armyOf(state, armyId);
+  if (!army || army.owner !== playerId) return fail('Ejercito invalido');
+  if (commanderId && army.commanderId !== commanderId) {
+    const assigned = assignCommander(state, playerId, armyId, commanderId);
+    if (!assigned.ok) return assigned;
+  }
+  return attack(state, armyId, target);
 }
 
 /** Offers a non-aggression understanding, weighted by diplomatic pressure. */

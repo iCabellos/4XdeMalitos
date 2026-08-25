@@ -3,7 +3,14 @@ import { useGame } from '../store';
 import { CityViewport } from '../components/CityViewport';
 import { CITY_BUILDINGS, CITY_BUILDING_IDS, type CityBranch } from '../../data/buildings.city';
 import { TROOP_IDS, troopDef, troopAttackAt, troopDefenseAt, MAX_TROOP_LEVEL } from '../../data/troops';
-import { commanderDef, commanderXpForLevel } from '../../data/commanders';
+import {
+
+  commanderXpForLevel,
+  COMMANDER_ROLE_ICON,
+  COMMANDER_ROLE_LABEL,
+  COMMANDERS,
+  type CommanderRole,
+} from '../../data/commanders';
 import { CITY_RESOURCE_IDS, RARE_RESOURCE_IDS, resourceDef } from '../../data/resources';
 import {
   canUpgradeCityBuilding,
@@ -242,39 +249,70 @@ export function CityScreen() {
               <div className="panel-title">
                 Comandantes · {commanders.length} disponibles · {effects.commanderSlots} plazas
               </div>
-              <div className="panel-body">
-                <div className="list">
-                  {Object.values({ ...city.commanders }).map((progress) => {
-                    const def = commanderDef(progress.id);
-                    const needed = commanderXpForLevel(progress.level);
-                    const pct = Math.min(100, (progress.xp / needed) * 100);
-                    return (
-                      <div key={progress.id} className="row" style={{ flexWrap: 'wrap' }}>
-                        <span className="grow">
-                          <span className="name">
-                            {def.name} · <span className="faint">{def.callsign}</span>{' '}
-                            <span className="tag accent">N{progress.level}</span>
-                          </span>
-                          <span className="sub">
-                            Especialidad {def.specialty} · +
-                            {Math.round(def.specialtyAttackBonus * 100)}% atk
-                          </span>
-                          <span className="sub">{def.ability.name}: {def.ability.description}</span>
-                          <div className="bar info" style={{ marginTop: 4 }}>
-                            <span style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="sub mono">
-                            {progress.xp}/{needed} XP
-                          </span>
-                        </span>
+              <div className="panel-body stack">
+                <div className="small faint">
+                  Cada mecanica tiene sus propios comandantes. Se desbloquean subiendo edificios, y
+                  suben de nivel con la experiencia que ganan en partida.
+                </div>
+
+                {(['assault', 'scout', 'gather', 'build'] as CommanderRole[]).map((role) => {
+                  const roster = Object.values(COMMANDERS).filter((c) => c.role === role);
+                  return (
+                    <div key={role} className="stack" style={{ gap: 6 }}>
+                      <div className="panel-title" style={{ padding: '6px 0 0' }}>
+                        {COMMANDER_ROLE_ICON[role]} {COMMANDER_ROLE_LABEL[role]}
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="small faint" style={{ marginTop: 8 }}>
-                  Se desbloquean subiendo edificios: Academia, Cuartel, Centro logistico y Centro
-                  diplomatico.
-                </div>
+                      <div className="list">
+                        {roster.map((def) => {
+                          const progress = city.commanders[def.id];
+                          const unlocked = !!progress;
+                          const needed = unlocked ? commanderXpForLevel(progress.level) : 0;
+                          const pct = unlocked ? Math.min(100, (progress.xp / needed) * 100) : 0;
+                          return (
+                            <div
+                              key={def.id}
+                              className="row"
+                              style={{ flexWrap: 'wrap', opacity: unlocked ? 1 : 0.55 }}
+                            >
+                              <span className="grow">
+                                <span className="name">
+                                  {def.name} <span className="faint">· {def.callsign}</span>{' '}
+                                  {unlocked ? (
+                                    <span className="tag accent">N{progress.level}</span>
+                                  ) : (
+                                    <span className="tag bad">BLOQUEADO</span>
+                                  )}
+                                </span>
+                                <span className="sub">
+                                  {def.ability.name}: {def.ability.description}
+                                </span>
+                                <span className="sub faint">
+                                  Especialidad {def.specialty} · +
+                                  {Math.round(def.specialtyAttackBonus * 100)}% ataque a esa rama
+                                </span>
+                                {unlocked ? (
+                                  <>
+                                    <div className="bar info" style={{ marginTop: 4 }}>
+                                      <span style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <span className="sub mono">
+                                      {progress.xp}/{needed} XP
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="sub" style={{ color: 'var(--accent)' }}>
+                                    Requiere {CITY_BUILDINGS[def.unlock.building].name} nivel{' '}
+                                    {def.unlock.level}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

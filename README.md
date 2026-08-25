@@ -23,6 +23,40 @@ fichero de ~780 kB que corre desde `file://`, desde cualquier hosting estatico o
 dentro de un sandbox que bloquee peticiones externas. La ciudad se guarda en
 `localStorage`, asi que la metaprogresion sobrevive a recargar la pagina.
 
+## El mapa
+
+Tres zonas concentricas separadas por **muros que nada cruza** - ni terrestre,
+ni naval, ni aereo. La unica apertura es una **puerta**, y las puertas se abren
+en un dia fijo, igual para todos. Eso convierte los nueve dias en tres actos:
+
+```
+        ZONA 1 - PERIFERIA          5 sectores amurallados, un spawn cada uno
+        recursos comunes            dias 1-2: desarrollas solo, sin contacto
+              |
+          [ PUERTA ]                se abre el DIA 3
+              |
+        ZONA 2 - CINTURON           3 sectores disputados
+        comunes muy abundantes      dias 3-5: primer conflicto real
+        raros escasos               objetivos con guarnicion -> items y buffos
+              |
+          [ PUERTA ]                se abre el DIA 6
+              |
+        ZONA 3 - NUCLEO             recursos raros abundantes
+        Mando Central               dias 6-9: carrera por el item legendario
+```
+
+Reparto de contenido, exactamente como esta briefeado:
+
+| Zona | Comun | Raro | Otros |
+| --- | --- | --- | --- |
+| 1 | abundante | ninguno | - |
+| 2 | muy abundante | escaso | 1 objetivo con guarnicion por sector, 1 instalacion |
+| 3 | - | abundante + una veta fina | Mando Central: conquistalo y te llevas el Nucleo del Elemento X |
+
+Los sectores de una misma zona tambien estan amurallados entre si y **no** tienen
+puertas: todo el mundo se ve empujado hacia dentro. El nucleo acaba siendo el
+unico nodo que conecta los tres sectores del cinturon.
+
 ## El loop
 
 ```
@@ -82,7 +116,11 @@ tecnologias, comandantes, terrenos y objetivos son tablas en `/data`, y
 
 | Sistema | Estado |
 | --- | --- |
-| Mapa hexagonal 3D por semilla, regiones, puertas, nucleo bloqueado | Completo |
+| Mapa de 3 zonas con muros infranqueables y puertas con horario | Completo |
+| Objetivos con guarnicion que sueltan items y buffos de partida | Completo |
+| 12 comandantes en 4 mecanicas: asalto, recoleccion, construccion, exploracion | Completo |
+| Ordenes con seleccion: que unidades mueves, con que comandante atacas | Completo |
+| Modelos 3D por tipo de unidad (infanteria, blindado, artilleria, naval, aereo) | Completo |
 | Fog of war de 3 niveles (oculto / recordado / visible) con sombra de terreno | Completo |
 | Economia doble: recursos de partida frente a recursos de ciudad | Completo |
 | Ciudadanos como recurso estrategico limitado | Completo |
@@ -121,24 +159,25 @@ convierte las partidas en un paseo.
 Dos barridos independientes de 40 partidas (`npm run sim -- <semilla> 40`):
 
 ```
-semillas 1000-1039   diplomatic 14 · humano(auto) 10 · military 6 · economic 6 · explorer 4
-                     objetivo 12 (30%) · puntuacion 28 (70%) · 7.35 dias de media
+semillas 1000-1039   humano(auto) 13 · diplomatic 10 · economic 8 · explorer 7 · military 2
+                     objetivo 19 (48%) · puntuacion 21 (52%) · 8.18 dias de media
 
-semillas 7000-7039   diplomatic 15 · humano(auto) 11 · economic 8 · military 5 · explorer 1
-                     objetivo  7 (18%) · puntuacion 33 (82%) · 8.00 dias de media
+semillas 7000-7039   diplomatic 11 · explorer 10 · humano(auto) 7 · military 7 · economic 5
+                     objetivo 14 (35%) · puntuacion 26 (65%) · 8.38 dias de media
 ```
 
 Lo que dicen estos numeros:
 
-- **Los cinco perfiles ganan partidas.** No hay una estrategia unica dominante.
-- **El objetivo principal se consigue entre un 18% y un 30% de las veces.** Es
-  alcanzable pero disputado, que es lo que se buscaba: obliga a competir por el
-  centro sin convertir la partida en una carrera resuelta.
-- **Hallazgo pendiente de ajuste: el perfil diplomatico gana demasiado** (~36%
-  frente al 20% que le tocaria) y el explorador demasiado poco. El diplomatico
-  acumula defensa y ciencia a la vez y evita perder tropas; el explorador paga
-  movilidad y vision sin poder convertirlas en control. Es el primer numero que
-  tocaria mover en una pasada de balance.
+- **Los cinco perfiles ganan partidas** y el reparto cambia entre barridos: no
+  hay una estrategia unica dominante.
+- **El objetivo principal se consigue entre un 35% y un 48% de las veces.** El
+  nucleo es alcanzable pero disputado, que es lo que se buscaba.
+- **El rediseno del mapa arreglo el sesgo diplomatico** que tenia la version
+  anterior (ganaba un 36%). Con muros y puertas con horario, evitar el combate
+  ya no es una estrategia dominante: el cinturon hay que cruzarlo.
+- **Hallazgo pendiente: el perfil militar es el mas irregular** (2 victorias en
+  un barrido, 7 en el otro). Depende demasiado de que su sector toque un
+  cinturon rico. Es el siguiente numero que tocaria.
 
 No es un balance final. Es un espacio de decisiones vivo y un arnes que permite
 medirlo en segundos.
@@ -147,6 +186,11 @@ medirlo en segundos.
 
 **Escritorio**: raton (boton izquierdo arrastra = pan, derecho = rotar, rueda =
 zoom), `F1` panel de debug, `Espacio` avanzar dia.
+
+**Ordenes**: `MOVER` abre un selector para elegir **que unidades** se mueven (si
+eliges solo una parte, se separa un destacamento). `ATACAR` abre un selector
+para elegir **con que comandante** atacas, agrupados por mecanica; si ese
+comandante estaba en otro ejercito, se reasigna solo.
 
 **Movil / tactil**: un dedo arrastra = pan, dos dedos = zoom y rotacion, toque =
 seleccion. Ninguna interaccion depende de `hover`, todos los objetivos tactiles
@@ -176,11 +220,14 @@ Fuera del alcance de este vertical slice, por orden de prioridad sugerido:
    produce poca agua conectada; hay que generar mares utiles.
 4. **Marcha multi-dia real**: `moveTowards` avanza cada dia hacia el destino,
    pero no hay ordenes persistentes entre dias.
-5. **PWA / empaquetado movil**: el stack ya es compatible (Vite + WebGL, sin
+5. **Modelos de unidad**: son primitivas procedurales, no assets. La silueta
+   distingue infanteria de blindado, artilleria, naval y aereo, que es lo que
+   hace falta para jugar, pero no es arte final.
+6. **PWA / empaquetado movil**: el stack ya es compatible (Vite + WebGL, sin
    dependencias de escritorio); falta manifest, service worker y capa tactil
    pulida.
-6. **Audio, particulas y tutorial minimo**.
-7. **Mas contenido**: el sistema es de tablas, asi que anadir tropas, edificios
+7. **Audio, particulas y tutorial minimo**.
+8. **Mas contenido**: el sistema es de tablas, asi que anadir tropas, edificios
    o tecnologias es editar `/data`.
 
 ## Decisiones tecnicas

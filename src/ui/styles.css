@@ -351,7 +351,10 @@ button {
   background: rgba(255, 179, 64, 0.1);
 }
 
-.row .grow {
+.row .grow,
+.picker-row .grow,
+.item-card .grow,
+.gate-status .grow {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -361,14 +364,20 @@ button {
 
 /* Name and sub-lines are block-level so a title, a description and a cost each
    get their own line instead of running together into one paragraph. */
-.row .name {
+.row .name,
+.picker-row .name,
+.item-card .name,
+.gate-status .name {
   display: block;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.row .sub {
+.row .sub,
+.picker-row .sub,
+.item-card .sub,
+.gate-status .sub {
   display: block;
   color: var(--text-dim);
   font-size: 11px;
@@ -689,4 +698,169 @@ pre.sim-log {
   .rail { max-height: 26vh; }
   .topbar { padding: 5px 10px; }
   .actionbar { padding: 6px 10px; }
+}
+
+/* ------------------------------------------------- military presence badges */
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--line-soft);
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.badge-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.badge-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 2px;
+}
+
+/* ------------------------------------------------------------- zone banner */
+
+.zone-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(138, 90, 51, 0.28), rgba(138, 90, 51, 0.06));
+}
+
+.zone-banner .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.zone-banner .name {
+  font-weight: 700;
+}
+
+.zone-banner .sub {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.zone-banner .zone-num {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.zone-banner.zone-2 {
+  background: linear-gradient(90deg, rgba(109, 66, 35, 0.34), rgba(109, 66, 35, 0.06));
+}
+
+.zone-banner.zone-3 {
+  background: linear-gradient(90deg, rgba(79, 44, 20, 0.44), rgba(79, 44, 20, 0.08));
+  border-color: rgba(228, 112, 200, 0.4);
+}
+
+.zone-banner.zone-3 .zone-num {
+  color: var(--rare);
+}
+
+/* --------------------------------------------------------- gate countdown */
+
+.gate-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-dim);
+  background: rgba(255, 179, 64, 0.1);
+  font-size: 12px;
+}
+
+.gate-status.open {
+  border-color: rgba(99, 212, 113, 0.45);
+  background: rgba(99, 212, 113, 0.1);
+}
+
+/* ------------------------------------------------------ unit picker (MOVER) */
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+}
+
+.picker-row .stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stepper button {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-input);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+}
+
+.stepper .count {
+  min-width: 40px;
+  text-align: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------- items */
+
+.item-card {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  border-left-width: 3px;
+}
+
+.item-card .item-icon {
+  font-size: 20px;
+  line-height: 1;
 }

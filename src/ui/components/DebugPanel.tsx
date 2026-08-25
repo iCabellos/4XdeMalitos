@@ -10,6 +10,8 @@ import { finishMatch } from '../../core/turnSystem';
 import { armiesOf, createArmy } from '../../core/gameState';
 import { addCityResources } from '../../entities/city';
 import { computeMaxMovementPoints } from '../../core/movement';
+import { ITEM_IDS } from '../../data/items';
+import { claimItem } from '../../core/actions';
 
 /**
  * F1 debug console. Not shipped-quality UI on purpose - its only job is to make
@@ -148,11 +150,6 @@ export function DebugPanel() {
                   act(() => {
                     player.technologies = [...TECHNOLOGY_IDS];
                     recomputeModifiers(player);
-                    for (const region of match.regions) {
-                      if (!player.unlockedRegions.includes(region.id)) {
-                        player.unlockedRegions.push(region.id);
-                      }
-                    }
                     return 'Arbol tecnologico completo';
                   })
                 }
@@ -169,6 +166,36 @@ export function DebugPanel() {
                 }
               >
                 REVELAR MAPA
+              </button>
+              <button
+                className="btn small"
+                onClick={() =>
+                  act(() => {
+                    // Unseal every wall at once, to reach any zone immediately.
+                    let opened = 0;
+                    for (const id of match.tileOrder) {
+                      const gate = match.tiles[id].feature.gate;
+                      if (gate && !gate.open) {
+                        gate.open = true;
+                        opened++;
+                      }
+                    }
+                    return `${opened} puertas abiertas`;
+                  })
+                }
+              >
+                ABRIR PUERTAS
+              </button>
+              <button
+                className="btn small"
+                onClick={() =>
+                  act(() => {
+                    for (const id of ITEM_IDS) claimItem(match, player.id, id);
+                    return 'Todos los items concedidos';
+                  })
+                }
+              >
+                +TODOS LOS ITEMS
               </button>
               <button
                 className="btn small"

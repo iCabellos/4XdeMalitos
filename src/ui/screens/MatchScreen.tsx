@@ -14,13 +14,16 @@ import { hexDistanceId } from '../../map/hex';
 import { troopDef } from '../../data/troops';
 import {
   activateFacility,
-  attack,
+  assaultObjective,
+  attackWithCommander,
   buildAt,
-  captureGate,
   gather,
-  moveArmy,
+  holdGate,
   moveTowards,
+  moveUnits,
 } from '../../core/actions';
+import { UnitPicker, CommanderPicker } from '../components/OrderPickers';
+import { ZONES } from '../../data/zones';
 import type { MapViewSelection } from '../../rendering/mapRenderer';
 import type { HexId } from '../../map/hex';
 import type { MapBuildingId } from '../../data/buildings.map';
@@ -54,6 +57,10 @@ export function MatchScreen() {
   // centre of the map is locked terrain they cannot act on yet.
   const [focusHex, setFocusHex] = useState<HexId | null>(null);
   const [framedMatch, setFramedMatch] = useState<number | null>(null);
+  /** Units queued for a MOVER order; empty means "the whole army". */
+  const [unitSelection, setUnitSelection] = useState<Record<string, number>>({});
+  /** Commander queued for an ATACAR order. */
+  const [attackCommander, setAttackCommander] = useState<string | null>(null);
 
   const player = match?.players.find((p) => p.id === match.humanId) ?? null;
   const army = selectedArmyId && match ? match.armies[selectedArmyId] : null;
@@ -98,17 +105,47 @@ export function MatchScreen() {
     refresh();
   };
 
+  const beginMove = () => {
+    if (!army) return;
+    if (pendingAction?.type === 'move') {
+      setPendingAction(null);
+      return;
+    }
+    // Default to the whole army: partial moves are the exception.
+    const all: Record<string, number> = {};
+    for (const [troopId, count] of Object.entries(army.composition)) {
+      if (count > 0) all[troopId] = count;
+    }
+    setUnitSelection(all);
+    setPendingAction({ type: 'move' });
+  };
+
+  const beginAttack = () => {
+    if (!army) return;
+    if (pendingAction?.type === 'attack') {
+      setPendingAction(null);
+      return;
+    }
+    setAttackCommander(army.commanderId);
+    setPendingAction({ type: 'attack' });
+  };
+
   const handlePickHex = (hex: HexId | null) => {
     if (!hex) return;
     // A queued verb consumes the tap; otherwise the tap is plain inspection.
     if (army && pendingAction?.type === 'move') {
-      run(moveArmy(match, army.id, hex), 'Ejercito desplazado');
+      const result = moveUnits(match, player.id, army.id, unitSelection, hex);
+      run(result, result.detail?.detached ? 'Destacamento en marcha' : 'Ejercito desplazado');
+      if (result.ok && result.detail?.armyId) selectArmy(result.detail.armyId as string);
       setPendingAction(null);
       selectHex(hex);
       return;
     }
     if (army && pendingAction?.type === 'attack') {
-      run(attack(match, army.id, hex), 'Combate resuelto');
+      run(
+        attackWithCommander(match, player.id, army.id, hex, attackCommander),
+        'Combate resuelto',
+      );
       setPendingAction(null);
       selectHex(hex);
       return;
@@ -151,21 +188,42 @@ export function MatchScreen() {
   const captureHere = () => {
     if (!army) return;
     const tile = match.tiles[army.hex];
-    if (tile.feature.gate) {
-      run(captureGate(match, army.id), 'Puerta tomada: region abierta');
+    const secondary = tile.feature.secondaryObjective;
+    if (secondary && !secondary.defeatedBy) {
+      run(assaultObjective(match, army.id), `${secondary.name} arrasado`);
       return;
     }
     if (tile.feature.facility) {
-      run(activateFacility(match, army.id), 'Instalacion activada');
+      run(
+        activateFacility(match, army.id),
+        tile.feature.mainObjective ? 'Nucleo conquistado' : 'Instalacion activada',
+      );
       return;
     }
-    notify('No hay puerta ni instalacion en este hexagono');
+    if (tile.feature.gate) {
+      run(holdGate(match, army.id), 'Puerta bajo tu control');
+      return;
+    }
+    notify('Aqui no hay puerta, instalacion ni objetivo');
   };
 
   const tile = selectedHex ? match.tiles[selectedHex] : null;
   // CAPTURAR acts on whatever the selected army is standing on.
   const armyTile = army ? match.tiles[army.hex] : null;
-  const canCapture = !!armyTile && (!!armyTile.feature.gate || !!armyTile.feature.facility);
+  const canCapture =
+    !!armyTile &&
+    (!!armyTile.feature.gate ||
+      !!armyTile.feature.facility ||
+      (!!armyTile.feature.secondaryObjective && !armyTile.feature.secondaryObjective.defeatedBy));
+  const captureLabel = armyTile?.feature.secondaryObjective && !armyTile.feature.secondaryObjective.defeatedBy
+    ? 'ASALTAR'
+    : armyTile?.feature.mainObjective
+      ? 'CONQUISTAR'
+      : 'CAPTURAR';
+  // Day the next sealed zone opens, so the clock is always on screen.
+  const nextZoneOpening = ([2, 3] as const)
+    .map((z) => ZONES[z].gatesOpenOnDay)
+    .find((day) => day > match.day);
 
   return (
     <div className="screen">
@@ -194,6 +252,15 @@ export function MatchScreen() {
           <span className="icon">★</span>
           <span className="value">{player.score}</span>
         </span>
+        {nextZoneOpening !== undefined && (
+          <span
+            className="res"
+            title={`Las puertas de la siguiente zona se abren el dia ${nextZoneOpening}`}
+          >
+            <span className="icon">{'\u{1F512}'}</span>
+            <span className="value">D{nextZoneOpening}</span>
+          </span>
+        )}
       </header>
 
       <div className="match-layout">
@@ -218,6 +285,25 @@ export function MatchScreen() {
               ))}
             </div>
           </div>
+
+          {army && pendingAction?.type === 'move' && (
+            <UnitPicker
+              army={army}
+              player={player}
+              selection={unitSelection}
+              onChange={setUnitSelection}
+              onCancel={() => setPendingAction(null)}
+            />
+          )}
+          {army && pendingAction?.type === 'attack' && (
+            <CommanderPicker
+              army={army}
+              player={player}
+              selected={attackCommander}
+              onSelect={setAttackCommander}
+              onCancel={() => setPendingAction(null)}
+            />
+          )}
 
           {tab === 'info' && (
             <>
@@ -275,14 +361,14 @@ export function MatchScreen() {
         <button
           className={`btn${pendingAction?.type === 'move' ? ' active' : ''}`}
           disabled={!army}
-          onClick={() => setPendingAction(pendingAction?.type === 'move' ? null : { type: 'move' })}
+          onClick={beginMove}
         >
           MOVER
         </button>
         <button
           className={`btn${pendingAction?.type === 'attack' ? ' active' : ''}`}
           disabled={!army}
-          onClick={() => setPendingAction(pendingAction?.type === 'attack' ? null : { type: 'attack' })}
+          onClick={beginAttack}
         >
           ATACAR
         </button>
@@ -300,7 +386,7 @@ export function MatchScreen() {
           EXPLORAR
         </button>
         <button className="btn" disabled={!canCapture} onClick={captureHere}>
-          CAPTURAR
+          {captureLabel}
         </button>
 
         <span className="spacer" />

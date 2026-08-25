@@ -32,12 +32,6 @@ export function canBuild(
     return { ...base, reason: techName };
   }
   if (tile.buildingId) return { ...base, reason: 'El hexagono ya tiene una estructura' };
-  if (!player.unlockedRegions.includes(tile.regionId)) {
-    const region = state.regions.find((r) => r.id === tile.regionId);
-    if (region && region.lock.type !== 'none') {
-      return { ...base, reason: `Region bloqueada: ${region.name}` };
-    }
-  }
   if (!TERRAINS[tile.terrain].passableBy.includes('land')) {
     return { ...base, reason: 'Terreno no edificable' };
   }

@@ -6,13 +6,30 @@ export const BALANCE = {
   match: {
     totalDays: 9,
     participants: 5,
-    mapRadius: 7,
-    /** Ring (in hexes from centre) where the five start positions are placed. */
-    spawnRing: 5,
-    /** Radius of the locked central region holding the main objective. */
-    coreRadius: 2,
-    /** Gates guarding the core region. */
-    coreGates: 3,
+    /** Radius 8 gives 217 hexes: three zones with room to manoeuvre in each. */
+    mapRadius: 8,
+    /** Ring the five spawns sit on, one per zone-1 sector. */
+    spawnRing: 7,
+  },
+
+  /** How much of each resource category each zone carries. See /data/zones.ts. */
+  zoneContent: {
+    /** Common nodes per zone-1 sector (abundant). */
+    zone1CommonPerSector: 3,
+    zone1Richness: 1,
+    /** Common nodes per zone-2 sector (very abundant). */
+    zone2CommonPerSector: 2,
+    zone2Richness: 1.9,
+    /** Rare nodes per zone-2 sector (thin seams). */
+    zone2RarePerSector: 1,
+    zone2RareRichness: 0.55,
+    /** Rare nodes in the core: few, but the richest on the map. */
+    zone3RareAbundant: 2,
+    zone3RareRichness: 1.9,
+    zone3RareThin: 1,
+    zone3ThinRichness: 0.6,
+    /** One garrisoned item encounter per zone-2 sector. */
+    secondaryPerZone2Sector: 1,
   },
 
   citizens: {

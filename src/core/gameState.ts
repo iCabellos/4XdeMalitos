@@ -182,7 +182,7 @@ function createPlayer(
     citizensTotal: 0,
     technologies: [],
     troopLevels: { ...loadout.troopLevels },
-    unlockedRegions: [],
+    items: [],
     fog: {},
     modifiers: defaultModifiers(),
     loadout,
@@ -191,6 +191,7 @@ function createPlayer(
     score: 0,
     eliminated: false,
     nonAggression: [],
+    homeRegion: -1,
     stats: {
       hexesControlled: 0,
       buildingsBuilt: 0,
@@ -201,6 +202,7 @@ function createPlayer(
       resourcesGathered: 0,
       rareGathered: 0,
       techsResearched: 0,
+      objectivesCleared: 0,
     },
   };
   recomputeModifiers(player);
@@ -270,10 +272,11 @@ export function createMatch(options: CreateMatchOptions): MatchState {
     rngState: rng.getState(),
   };
 
-  // Regions with no lock are open to everyone from day one.
+  // Nothing starts revealed: every player opens their own sector by moving.
   for (const player of players) {
-    player.unlockedRegions = state.regions.filter((r) => r.lock.type === 'none').map((r) => r.id);
     for (const id of state.tileOrder) player.fog[id] = 0;
+    const home = generated.startPositions[player.id];
+    player.homeRegion = home ? state.tiles[home].regionId : -1;
   }
 
   // Every participant fields one army on their start hex.

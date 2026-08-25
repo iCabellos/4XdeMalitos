@@ -13,7 +13,8 @@ import {
   activateFacility,
   attack,
   buildAt,
-  captureGate,
+  assaultObjective,
+  holdGate,
   captureHex,
   effectiveArmySlots,
   enemyArmiesAt,
@@ -167,8 +168,18 @@ function resolveOnSiteActions(state: MatchState, player: MatchPlayer, armyId: st
   if (!tile) return false;
   let acted = false;
 
-  if (tile.feature.gate && !player.unlockedRegions.includes(tile.feature.gate.regionId)) {
-    if (captureGate(state, armyId).ok) acted = true;
+  // Sitting on a gate marks it as ours and puts us through the moment it opens.
+  if (tile.feature.gate && tile.feature.gate.controlledBy !== player.id) {
+    if (holdGate(state, armyId).ok) acted = true;
+  }
+  // Only assault a garrison we can plausibly beat: losing the army here is worse
+  // than never trying.
+  const secondary = tile.feature.secondaryObjective;
+  if (secondary && !secondary.defeatedBy && !army.actedThisDay) {
+    const garrison = Object.values(secondary.garrison).reduce((a, b) => a + b, 0);
+    if (armySize(army) > garrison * 1.4) {
+      if (assaultObjective(state, armyId).ok) acted = true;
+    }
   }
   if (tile.feature.facility && tile.feature.facility.owner !== player.id) {
     if (activateFacility(state, armyId).ok) acted = true;
@@ -313,7 +324,8 @@ function strategicTargets(state: MatchState, player: MatchPlayer): HexId[] {
   for (const id of state.tileOrder) {
     const tile = state.tiles[id];
     if ((player.fog[id] ?? 0) === 0) continue;
-    if (tile.feature.gate && !player.unlockedRegions.includes(tile.feature.gate.regionId)) out.push(id);
+    if (tile.feature.gate) out.push(id);
+    else if (tile.feature.secondaryObjective && !tile.feature.secondaryObjective.defeatedBy) out.push(id);
     else if (tile.feature.facility && tile.feature.facility.owner !== player.id) out.push(id);
     else if (tile.node && !tile.buildingId && tile.node.remaining > 0) {
       const rare = ['titaniumDeposit', 'uraniumDeposit', 'crystalDeposit'].includes(tile.node.nodeId);
