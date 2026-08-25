@@ -30,6 +30,29 @@ export interface SimulationResult {
 
 const AUTOPLAY_PERSONALITY = 'economic' as const;
 
+/**
+ * Plays out the remaining days with no human input.
+ *
+ * The turn pipeline deliberately skips the human seat (a person is meant to act
+ * during the player phase), so any auto-play has to drive that seat itself.
+ * Both the CLI simulator and the in-game AUTO-SIM button go through here so the
+ * two can never drift apart again.
+ */
+export function autoPlayRemainingDays(state: MatchState, maxDays = 50): void {
+  const human = state.players.find((p) => p.isHuman);
+  const previousPersonality = human?.personality ?? null;
+  if (human) human.personality = AUTOPLAY_PERSONALITY;
+
+  let guard = 0;
+  while (!state.finished && guard < maxDays) {
+    if (human && !human.eliminated) runBotTurn(state, human.id);
+    endDay(state, (s, botId) => runBotTurn(s, botId));
+    guard++;
+  }
+
+  if (human) human.personality = previousPersonality;
+}
+
 /** Runs a full nine-day match with no human input and returns a readable log. */
 export function simulateMatch(options: SimulationOptions): SimulationResult {
   const city = options.city ?? createNewCity();
@@ -38,7 +61,8 @@ export function simulateMatch(options: SimulationOptions): SimulationResult {
   // Give the human seat a personality so the AI can drive it too.
   const human = state.players.find((p) => p.isHuman)!;
   const originalPersonality = human.personality;
-  if (options.autoPlayHuman !== false) human.personality = AUTOPLAY_PERSONALITY;
+  const autoPlayHuman = options.autoPlayHuman !== false;
+  if (autoPlayHuman) human.personality = AUTOPLAY_PERSONALITY;
 
   const log: string[] = [];
   startDay(state);
@@ -46,7 +70,7 @@ export function simulateMatch(options: SimulationOptions): SimulationResult {
   let guard = 0;
   while (!state.finished && guard < 50) {
     const day = state.day;
-    if (options.autoPlayHuman !== false) runBotTurn(state, human.id);
+    if (autoPlayHuman && !human.eliminated) runBotTurn(state, human.id);
     endDay(state, (s, botId) => runBotTurn(s, botId));
 
     const header = `DIA ${day}`;
