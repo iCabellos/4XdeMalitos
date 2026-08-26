@@ -40,8 +40,15 @@ export interface CityEffects {
   diplomacyPressure?: number;
   /** Reveals this many hexes around rival start positions at match start. */
   intelReveal?: number;
-  /** Raises the city technology tier, gating advanced troops and buildings. */
+  /** Raises the city technology tier, gating advanced buildings and research. */
   cityTier?: number;
+  /**
+   * Barracks level. This is what decides which troops you can recruit at all,
+   * so it is surfaced as its own effect rather than inferred from the building.
+   */
+  barracksLevel?: number;
+  /** Troops that can be held across all your armies in a match. */
+  trainingCapacity?: number;
   /** Passive per-match trickle into the city stockpile. */
   passiveIncome?: Partial<Record<CityResourceId, number>>;
 }
@@ -101,7 +108,9 @@ export const CITY_BUILDINGS: Record<string, CityBuildingDefinition> = {
     maxLevel: 5,
     plot: { x: -2.2, z: 1.6 },
     color: 0xb04a3a,
-    description: 'Tropas iniciales en cada partida y multiplicador de ataque.',
+    description:
+      'Decide QUE tropas puedes reclutar. Cada nivel abre una rama nueva, sube el ' +
+      'contingente que puedes sostener y mejora el ataque.',
     costPerLevel: [
       { gold: 60, materials: 80 },
       { gold: 160, materials: 200 },
@@ -110,11 +119,11 @@ export const CITY_BUILDINGS: Record<string, CityBuildingDefinition> = {
       { gold: 1700, materials: 2000, titanium: 34, uranium: 16 },
     ],
     effectsPerLevel: [
-      { attackMultiplier: 1.0, startResources: { infantryStart: 10 } },
-      { attackMultiplier: 1.06, startResources: { infantryStart: 16 } },
-      { attackMultiplier: 1.12, startResources: { infantryStart: 24 } },
-      { attackMultiplier: 1.2, startResources: { infantryStart: 34 } },
-      { attackMultiplier: 1.3, startResources: { infantryStart: 46 } },
+      { attackMultiplier: 1.0, barracksLevel: 1, trainingCapacity: 60, startResources: { infantryStart: 10 } },
+      { attackMultiplier: 1.06, barracksLevel: 2, trainingCapacity: 95, startResources: { infantryStart: 16 } },
+      { attackMultiplier: 1.12, barracksLevel: 3, trainingCapacity: 135, startResources: { infantryStart: 24 } },
+      { attackMultiplier: 1.2, barracksLevel: 4, trainingCapacity: 185, startResources: { infantryStart: 34 } },
+      { attackMultiplier: 1.3, barracksLevel: 5, trainingCapacity: 250, startResources: { infantryStart: 46 } },
     ],
     requiresCommandLevel: [1, 1, 2, 3, 4],
   },

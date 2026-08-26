@@ -142,10 +142,11 @@ export function canUpgradeTroop(city: CityState, troopId: string): UpgradeCheck 
       missing: {},
     };
   }
-  if (cityTier(city) < def.cityTier) {
+  const barracks = cityBuildingLevel(city, 'barracks');
+  if (barracks < def.barracksLevel) {
     return {
       ok: false,
-      reason: `Requiere Centro de mando nivel ${def.cityTier}`,
+      reason: `Requiere Cuartel nivel ${def.barracksLevel}`,
       cost: null,
       missing: {},
     };
@@ -201,6 +202,8 @@ export function deriveCityEffects(city: CityState): Required<
     | 'diplomacyPressure'
     | 'intelReveal'
     | 'cityTier'
+    | 'barracksLevel'
+    | 'trainingCapacity'
   >
 > & { startResources: Record<string, number>; passiveIncome: Record<string, number> } {
   const acc = {
@@ -219,6 +222,8 @@ export function deriveCityEffects(city: CityState): Required<
     diplomacyPressure: 0,
     intelReveal: 0,
     cityTier: 1,
+    barracksLevel: 0,
+    trainingCapacity: 40,
     startResources: {} as Record<string, number>,
     passiveIncome: {} as Record<string, number>,
   };
@@ -240,6 +245,8 @@ export function deriveCityEffects(city: CityState): Required<
     acc.commanderSlots = Math.max(acc.commanderSlots, effects.commanderSlots ?? 0);
     acc.troopLevelCap = Math.max(acc.troopLevelCap, effects.troopLevelCap ?? 0);
     acc.cityTier = Math.max(acc.cityTier, effects.cityTier ?? 0);
+    acc.barracksLevel = Math.max(acc.barracksLevel, effects.barracksLevel ?? 0);
+    acc.trainingCapacity = Math.max(acc.trainingCapacity, effects.trainingCapacity ?? 0);
     acc.productionMultiplier *= effects.productionMultiplier ?? 1;
     acc.scienceMultiplier *= effects.scienceMultiplier ?? 1;
     acc.attackMultiplier *= effects.attackMultiplier ?? 1;

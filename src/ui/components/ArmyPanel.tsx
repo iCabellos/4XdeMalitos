@@ -3,7 +3,7 @@ import { troopDef, troopAttackAt, troopDefenseAt } from '../../data/troops';
 import { commanderDef } from '../../data/commanders';
 import { armySize } from '../../core/movement';
 import { armyPower } from '../../core/combat';
-import { armySlotsUsed, armySlotCapacity, canTrain, canTrainAt } from '../../core/economy';
+import { armySlotsUsed, trainingCapacity, trainingCapacityUsed, canTrain, canTrainAt } from '../../core/economy';
 import { availableTroops } from '../../core/technology';
 import { assignCommander, effectiveArmySlots, splitArmy, trainTroops, mergeArmies } from '../../core/actions';
 import { armiesOf } from '../../core/gameState';
@@ -59,7 +59,8 @@ export function ArmyPanel({ state, viewerId, selectedArmyId, onSelectArmy, onAct
         {selected && (
           <>
             <div className="small faint">
-              Capacidad {armySlotsUsed(selected)}/{armySlotCapacity(player)} plazas
+              Este ejercito ocupa {armySlotsUsed(selected)} plazas · contingente total{' '}
+              {trainingCapacityUsed(state, viewerId)}/{trainingCapacity(state, player)}
             </div>
 
             <div className="list">

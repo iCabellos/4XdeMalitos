@@ -28,6 +28,9 @@ import {
   assaultObjective,
   attackWithCommander,
   claimItem,
+  offerTreaty,
+  offerTribute,
+  breakRelations,
 } from '../src/core/actions';
 import { runProduction, runUpkeep, growCitizens } from '../src/core/economy';
 import { updateTerritory } from '../src/core/territory';
@@ -35,6 +38,10 @@ import { TERRAINS } from '../src/data/terrain';
 import { BALANCE } from '../src/data/balance';
 import { ZONES } from '../src/data/zones';
 import { ITEMS } from '../src/data/items';
+import { TECHNOLOGY_IDS } from '../src/data/technologies';
+import { relationOf, adjustOpinion } from '../src/core/diplomacy';
+import { availableTroops, troopLockReason } from '../src/core/technology';
+import { trainingCapacity, canTrain } from '../src/core/economy';
 import type { MatchState } from '../src/core/types';
 
 function newMatch(seed = 12345): MatchState {
@@ -733,5 +740,140 @@ describe('match setup', () => {
     expect(trainTroops(state, player.id, army.id, 'infantry', 3).ok).toBe(true);
     army.hex = state.tileOrder.find((id) => !state.tiles[id].feature.startFor)!;
     expect(trainTroops(state, player.id, army.id, 'infantry', 3).ok).toBe(false);
+  });
+});
+
+describe('diplomacy', () => {
+  it('starts everyone neutral with no opinion', () => {
+    const state = newMatch();
+    for (const player of state.players) {
+      for (const other of state.players) {
+        if (other.id === player.id) continue;
+        expect(relationOf(player, other.id).stance).toBe('neutral');
+        expect(relationOf(player, other.id).opinion).toBe(0);
+      }
+    }
+  });
+
+  it('refuses a pact from someone who has done nothing to earn it', () => {
+    const state = newMatch();
+    const result = offerTreaty(state, state.humanId, 'p1', 'nonAggression');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/confianza/i);
+  });
+
+  it('lets tribute buy the goodwill a pact needs', () => {
+    const state = newMatch();
+    const human = humanPlayer(state);
+    human.stock.titanium = 40;
+    // Titanium is weighted heavily, so a serious gift moves the needle.
+    for (let i = 0; i < 3; i++) offerTribute(state, human.id, 'p1', { titanium: 8 });
+    const bot = state.players.find((p) => p.id === 'p1')!;
+    expect(relationOf(bot, human.id).opinion).toBeGreaterThan(20);
+    expect(offerTreaty(state, human.id, 'p1', 'nonAggression').ok).toBe(true);
+    expect(relationOf(bot, human.id).stance).toBe('nonAggression');
+  });
+
+  it('moves the goods for real when tribute is sent', () => {
+    const state = newMatch();
+    const human = humanPlayer(state);
+    const bot = state.players.find((p) => p.id === 'p1')!;
+    human.stock.materials = 200;
+    const botBefore = bot.stock.materials;
+    offerTribute(state, human.id, 'p1', { materials: 100 });
+    expect(human.stock.materials).toBe(100);
+    expect(bot.stock.materials).toBeGreaterThan(botBefore);
+  });
+
+  it('refuses tribute the player cannot pay', () => {
+    const state = newMatch();
+    const human = humanPlayer(state);
+    human.stock.titanium = 1;
+    expect(offerTribute(state, human.id, 'p1', { titanium: 50 }).ok).toBe(false);
+  });
+
+  it('turns an attack into a war and costs standing', () => {
+    const state = newMatch(999);
+    const human = humanPlayer(state);
+    const army = armiesOf(state, human.id)[0];
+    army.composition = { infantry: 40 };
+    const enemy = armiesOf(state, 'p1')[0];
+    const home = state.tiles[army.hex];
+    const target = neighborIds(home.q, home.r).find((id) => state.tiles[id])!;
+    enemy.hex = target;
+    enemy.composition = { infantry: 5 };
+
+    attackWithCommander(state, human.id, army.id, target, null);
+    const bot = state.players.find((p) => p.id === 'p1')!;
+    expect(relationOf(bot, human.id).stance).toBe('war');
+    expect(relationOf(bot, human.id).opinion).toBeLessThan(0);
+  });
+
+  it('makes breaking a signed pact cost standing with everyone watching', () => {
+    const state = newMatch(4242);
+    const human = humanPlayer(state);
+    human.stock.titanium = 100;
+    for (let i = 0; i < 3; i++) offerTribute(state, human.id, 'p1', { titanium: 8 });
+    expect(offerTreaty(state, human.id, 'p1', 'nonAggression').ok).toBe(true);
+
+    const bystanderBefore = relationOf(
+      state.players.find((p) => p.id === 'p2')!,
+      human.id,
+    ).opinion;
+
+    breakRelations(state, human.id, 'p1');
+
+    const bystanderAfter = relationOf(
+      state.players.find((p) => p.id === 'p2')!,
+      human.id,
+    ).opinion;
+    expect(bystanderAfter).toBeLessThan(bystanderBefore);
+  });
+
+  it('lets grudges fade a little each day rather than poisoning the match', () => {
+    const state = newMatch();
+    adjustOpinion(state, 'p1', state.humanId, -50);
+    const before = relationOf(state.players.find((p) => p.id === 'p1')!, state.humanId).opinion;
+    endDay(state);
+    const after = relationOf(state.players.find((p) => p.id === 'p1')!, state.humanId).opinion;
+    expect(after).toBeGreaterThan(before);
+  });
+});
+
+describe('barracks-driven recruitment', () => {
+  it('offers only what the barracks has unlocked', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    player.loadout.barracksLevel = 1;
+    const roster = availableTroops(player);
+    expect(roster).toContain('infantry');
+    expect(roster).toContain('recon');
+    expect(roster).not.toContain('tank');
+    expect(troopLockReason(player, 'tank')).toMatch(/Cuartel nivel 4/);
+  });
+
+  it('opens new troops as the barracks grows', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    player.loadout.barracksLevel = 5;
+    // Tech-gated troops still need their doctrine.
+    expect(availableTroops(player)).not.toContain('tank');
+    player.technologies = [...TECHNOLOGY_IDS];
+    expect(availableTroops(player)).toContain('tank');
+    expect(availableTroops(player)).toContain('frigate');
+  });
+
+  it('caps the whole contingent, not each army separately', () => {
+    const state = newMatch();
+    const player = humanPlayer(state);
+    const army = armiesOf(state, player.id)[0];
+    player.stock.materials = 99999;
+    player.stock.food = 99999;
+    const capacity = trainingCapacity(state, player);
+    // Fill the pool, then verify one more soldier is refused.
+    army.composition = { infantry: capacity };
+    const check = canTrain(state, player, army, 'infantry', 1);
+    expect(check.ok).toBe(false);
+    expect(check.reason).toMatch(/Contingente completo/);
   });
 });

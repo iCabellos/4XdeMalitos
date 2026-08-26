@@ -28,6 +28,9 @@ import { updateFogForPlayer } from '../map/fogOfWar';
 import { updateTerritory } from './territory';
 import { createArmy, countArmies, playerById } from './gameState';
 import { grantMany } from './resources';
+import { proposeTreaty, sendTribute, declareWar, registerAggression } from './diplomacy';
+import type { TreatyKind } from '../data/diplomacy';
+import type { ResourceCost } from '../data/troops';
 import type { Army, MatchState, PlayerId, Tile } from './types';
 
 export interface ActionResult {
@@ -181,14 +184,9 @@ export function attack(state: MatchState, armyId: string, target: HexId): Action
 
   const defender = defenders.reduce((a, b) => (armySize(a) >= armySize(b) ? a : b));
   const defenderPlayer = playerById(state, defender.owner);
-  if (player.nonAggression.includes(defender.owner)) {
-    // Breaking a pact is allowed, but it is recorded and the pact ends.
-    player.nonAggression = player.nonAggression.filter((id) => id !== defender.owner);
-    defenderPlayer.nonAggression = defenderPlayer.nonAggression.filter((id) => id !== player.id);
-    logEvent(state, 'pactBroken', `${player.name} rompe el pacto con ${defenderPlayer.name}.`, {
-      playerId: player.id,
-    });
-  }
+  // Attacking is always allowed, including through a signed pact - but it is
+  // recorded, it ends the pact, and everyone watching thinks less of you.
+  registerAggression(state, player.id, defender.owner);
 
   const outcome = resolveCombat(state, army, defender, tile);
   state.combatLog.push(outcome.report);
@@ -682,21 +680,31 @@ export function attackWithCommander(
   return attack(state, armyId, target);
 }
 
-/** Offers a non-aggression understanding, weighted by diplomatic pressure. */
-export function proposeNonAggression(
+/** Puts a treaty to another participant; they weigh it and answer. */
+export function offerTreaty(
   state: MatchState,
   fromId: PlayerId,
   toId: PlayerId,
-  accepted: boolean,
+  kind: TreatyKind,
 ): ActionResult {
-  const from = playerById(state, fromId);
-  const to = playerById(state, toId);
-  if (!accepted) return fail(`${to.name} rechaza el acuerdo`);
-  if (!from.nonAggression.includes(toId)) from.nonAggression.push(toId);
-  if (!to.nonAggression.includes(fromId)) to.nonAggression.push(fromId);
-  logEvent(state, 'diplomacy', `${from.name} y ${to.name} firman un pacto de no agresion.`, {
-    playerId: fromId,
-  });
-  return ok();
+  const result = proposeTreaty(state, fromId, toId, kind);
+  return result.ok ? ok({ kind }) : fail(result.reason);
+}
+
+/** Hands resources over to buy goodwill. */
+export function offerTribute(
+  state: MatchState,
+  fromId: PlayerId,
+  toId: PlayerId,
+  resources: ResourceCost,
+): ActionResult {
+  const result = sendTribute(state, fromId, toId, resources);
+  return result.ok ? ok({ resources }) : fail(result.reason);
+}
+
+/** Formally goes to war, freeing you to attack without breaking an oath. */
+export function breakRelations(state: MatchState, fromId: PlayerId, toId: PlayerId): ActionResult {
+  const result = declareWar(state, fromId, toId);
+  return result.ok ? ok() : fail(result.reason);
 }
 

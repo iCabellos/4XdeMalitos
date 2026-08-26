@@ -864,3 +864,211 @@ pre.sim-log {
   font-size: 20px;
   line-height: 1;
 }
+
+/* ------------------------------------------------------- daily task list */
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  text-align: left;
+  min-height: var(--tap);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.task:hover {
+  border-color: var(--text-faint);
+}
+
+.task .grow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task .name {
+  font-weight: 600;
+}
+
+.task .sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.task-mark {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.task.pending {
+  border-left: 3px solid var(--accent);
+}
+
+.task-mark.pending {
+  background: rgba(255, 179, 64, 0.18);
+  color: var(--accent);
+}
+
+.task.done {
+  opacity: 0.72;
+}
+
+.task-mark.done {
+  background: rgba(99, 212, 113, 0.18);
+  color: var(--good);
+}
+
+.task.locked {
+  opacity: 0.5;
+}
+
+.task-mark.locked {
+  background: var(--line-soft);
+  color: var(--text-faint);
+}
+
+/* -------------------------------------------------------- resource ledger */
+
+.resource-row {
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+
+.resource-row.rare {
+  border-color: rgba(228, 112, 200, 0.35);
+}
+
+.resource-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  cursor: pointer;
+  min-height: var(--tap);
+  list-style: none;
+}
+
+.resource-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.resource-row > summary .grow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.resource-row .name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.resource-row .sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.res-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.res-figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-detail {
+  padding: 0 10px 10px 39px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+
+.resource-detail p {
+  margin: 0 0 8px;
+}
+
+.source-block {
+  margin-bottom: 8px;
+}
+
+.source-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.source-label.good { color: var(--good); }
+.source-label.bad { color: var(--bad); }
+
+.source-block ul {
+  margin: 3px 0 0;
+  padding-left: 16px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------- diplomacy */
+
+.opinion-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-soft);
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.opinion-bar .fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--bad), var(--accent), var(--good));
+  transition: width 0.25s ease;
+}
+
+/* The bar is useless without knowing where "yes" starts. */
+.opinion-bar .threshold {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--text);
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+.clickable-res {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}

@@ -25,6 +25,7 @@ import { updateFog, revealArea } from '../map/fogOfWar';
 import { updateTerritory } from './territory';
 import { createObjectiveProgress, pickMainObjective, allSecondaryObjectiveIds } from './objectives';
 import { updateAllScores } from './scoring';
+import { initRelations } from './diplomacy';
 import { computeMaxMovementPoints } from './movement';
 import type { AnyMatchResourceId } from '../data/resources';
 
@@ -75,6 +76,8 @@ export function buildHumanLoadout(city: CityState): PlayerLoadout {
 
   return {
     cityTier: effects.cityTier,
+    barracksLevel: Math.max(1, effects.barracksLevel),
+    trainingCapacity: effects.trainingCapacity,
     startStock,
     citizens: effects.citizens,
     armySlots: Math.max(1, effects.armySlots),
@@ -119,6 +122,8 @@ export function buildBotLoadout(
 
   const loadout: PlayerLoadout = {
     cityTier: tier,
+    barracksLevel: Math.max(1, Math.min(5, tier)),
+    trainingCapacity: humanLoadout.trainingCapacity,
     startStock,
     citizens: humanLoadout.citizens,
     armySlots: Math.max(2, humanLoadout.armySlots),
@@ -190,7 +195,7 @@ function createPlayer(
     armySlots: loadout.armySlots,
     score: 0,
     eliminated: false,
-    nonAggression: [],
+    relations: {},
     homeRegion: -1,
     stats: {
       hexesControlled: 0,
@@ -290,6 +295,7 @@ export function createMatch(options: CreateMatchOptions): MatchState {
     army.movementPoints = army.maxMovementPoints;
   }
 
+  initRelations(state);
   updateTerritory(state);
   updateFog(state);
 

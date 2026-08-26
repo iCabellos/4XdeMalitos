@@ -136,14 +136,34 @@ export function research(player: MatchPlayer, techId: string): boolean {
   return true;
 }
 
-/** Troop ids the player may currently train, given city tier and research. */
+/**
+ * Troops the player may recruit. The barracks decides which troops exist for
+ * them at all; research adds the doctrine some of them additionally need.
+ */
 export function availableTroops(player: MatchPlayer): string[] {
   return TROOP_IDS.filter((id) => {
     const def = troopDef(id);
-    if (def.cityTier > player.loadout.cityTier) return false;
+    if (def.barracksLevel > player.loadout.barracksLevel) return false;
     if (def.unlockTechnology) return player.technologies.includes(def.unlockTechnology);
     return true;
   });
+}
+
+/** How many technologies the player could pay for right now. */
+export function researchableCount(player: MatchPlayer): number {
+  return TECHNOLOGY_IDS.filter((id) => checkTechnology(player, id).available).length;
+}
+
+/** Why a troop is not recruitable yet, for the UI to explain. */
+export function troopLockReason(player: MatchPlayer, troopId: string): string | null {
+  const def = troopDef(troopId);
+  if (def.barracksLevel > player.loadout.barracksLevel) {
+    return `Requiere Cuartel nivel ${def.barracksLevel}`;
+  }
+  if (def.unlockTechnology && !player.technologies.includes(def.unlockTechnology)) {
+    return `Requiere investigar ${techDef(def.unlockTechnology).name}`;
+  }
+  return null;
 }
 
 /** Map building ids the player may currently construct. */

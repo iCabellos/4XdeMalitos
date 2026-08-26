@@ -20,7 +20,7 @@ import {
   enemyArmiesAt,
   gather,
   moveTowards,
-  proposeNonAggression,
+  offerTreaty,
   researchTechnology,
   splitArmy,
   trainTroops,
@@ -32,6 +32,7 @@ import { armyPower } from '../core/combat';
 import { armySize, reachableHexes } from '../core/movement';
 import { armiesOf, matchRng, playerById, saveRng } from '../core/gameState';
 import { findMainObjectiveHex } from '../core/objectives';
+import { isBoundNotToAttack, runBotDiplomacy } from '../core/diplomacy';
 import type { MatchState, MatchPlayer, PlayerId } from '../core/types';
 
 export function runBotTurn(state: MatchState, botId: PlayerId): void {
@@ -42,6 +43,7 @@ export function runBotTurn(state: MatchState, botId: PlayerId): void {
 
   botResearch(state, player);
   botDiplomacy(state, player, rng.next());
+  runBotDiplomacy(state, botId);
   botTrain(state, player);
 
   // Armies act in a stable order so a replay of the same seed is identical.
@@ -74,7 +76,7 @@ function botDiplomacy(state: MatchState, player: MatchPlayer, roll: number): voi
   if (weights.diplomacy < 1) return;
   const human = state.players.find((p) => p.isHuman);
   if (!human || human.eliminated) return;
-  if (player.nonAggression.includes(human.id)) return;
+  if (isBoundNotToAttack(state, player.id, human.id)) return;
 
   const chance = 0.25 * weights.diplomacy + human.loadout.diplomacyPressure;
   if (roll > chance) return;
@@ -83,7 +85,7 @@ function botDiplomacy(state: MatchState, player: MatchPlayer, roll: number): voi
     armiesOf(state, human.id).some((h) => hexDistanceId(a.hex, h.hex) <= 4),
   );
   if (!contact) return;
-  proposeNonAggression(state, player.id, human.id, true);
+  offerTreaty(state, player.id, human.id, 'nonAggression');
 }
 
 function botTrain(state: MatchState, player: MatchPlayer): void {
@@ -211,7 +213,7 @@ function tryAttack(
   let bestTarget: { hex: HexId; ratio: number } | null = null;
   for (const other of Object.values(state.armies)) {
     if (other.owner === army.owner || armySize(other) <= 0) continue;
-    if (player.nonAggression.includes(other.owner)) continue;
+    if (isBoundNotToAttack(state, player.id, other.owner)) continue;
     const distance = hexDistanceId(army.hex, other.hex);
     if (distance > maxRange) continue;
     const theirPower = armyPower(state, other);

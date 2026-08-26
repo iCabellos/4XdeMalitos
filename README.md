@@ -57,6 +57,53 @@ Los sectores de una misma zona tambien estan amurallados entre si y **no** tiene
 puertas: todo el mundo se ve empujado hacia dentro. El nucleo acaba siendo el
 unico nodo que conecta los tres sectores del cinturon.
 
+## Tropas: el Cuartel manda
+
+El reclutamiento sigue el modelo de un city builder, no el de un 4X clasico:
+
+- **El Cuartel decide QUE tropas existen para ti.** Nivel 1 abre infanteria y
+  reconocimiento; 2, infanteria pesada y artilleria; 3, blindados, patrulleras y
+  drones; 4, tanques y helicopteros; 5, fragatas.
+- **La Academia decide hasta que nivel evolucionan**, y cada linea sube por
+  separado.
+- **La investigacion en partida anade la doctrina** que algunas ademas exigen.
+- **El contingente es un unico deposito** para todos tus ejercitos, no por
+  ejercito. El Cuartel fija el techo y cada base militar terminada lo amplia.
+
+Reclutas en tu ciudad o en una base militar propia, nunca en campo abierto.
+
+## Tu ciudad esta dentro de la partida
+
+El hexagono inicial de la Zona 1 **es tu ciudad**. Tocarlo abre la pestana
+CIUDAD, desde donde reclutas, formas marchas nuevas y ves lo que tu progreso
+permanente esta aportando ahora mismo. Es el punto desde el que despliegas, al
+estilo de un mapa de marchas.
+
+## Diplomacia
+
+Cada participante tiene una **opinion** de los demas, y esa opinion es lo unico
+que decide si te firman algo:
+
+- El **tributo** la sube, y las mercancias cambian de manos de verdad.
+- **Atacar** la hunde y abre la guerra.
+- **Romper un pacto firmado** te cuesta credito con todos los que miran, no solo
+  con la victima.
+- Los rencores se **diluyen unos puntos cada dia**, asi que nada queda envenenado
+  para siempre.
+
+La barra de opinion marca el umbral exacto que necesitas, y un rechazo dice
+cuantos puntos te faltaban. Los bots solo abren negociaciones si su personalidad
+lo pide y nunca sostienen mas de dos acuerdos: cuando podian pactar con todos,
+las partidas se quedaban sin un solo combate.
+
+## Que puedo hacer hoy
+
+La pestana **HOY** deriva del estado real la lista de acciones del turno: mover,
+reclutar, construir, investigar, recolectar, posicionarte en una puerta antes de
+que abra, asaltar un objetivo y negociar. Cada entrada dice por que importa hoy,
+lleva su progreso, y al tocarla te lleva al sitio. El contador del HUD dice
+cuantas quedan pendientes.
+
 ## El loop
 
 ```
@@ -117,6 +164,11 @@ tecnologias, comandantes, terrenos y objetivos son tablas en `/data`, y
 | Sistema | Estado |
 | --- | --- |
 | Mapa de 3 zonas con muros infranqueables y puertas con horario | Completo |
+| Reclutamiento gobernado por el Cuartel, con contingente global | Completo |
+| Ciudad accesible dentro de la partida como punto de despliegue | Completo |
+| Lista de tareas del dia derivada del estado real | Completo |
+| Diplomacia con opinion, tributo, pactos, alianzas y guerra | Completo |
+| Ficha de cada material: que es, que lo genera y que lo consume | Completo |
 | Objetivos con guarnicion que sueltan items y buffos de partida | Completo |
 | 12 comandantes en 4 mecanicas: asalto, recoleccion, construccion, exploracion | Completo |
 | Ordenes con seleccion: que unidades mueves, con que comandante atacas | Completo |
@@ -162,8 +214,8 @@ Dos barridos independientes de 40 partidas (`npm run sim -- <semilla> 40`):
 semillas 1000-1039   humano(auto) 13 · diplomatic 10 · economic 8 · explorer 7 · military 2
                      objetivo 19 (48%) · puntuacion 21 (52%) · 8.18 dias de media
 
-semillas 7000-7039   diplomatic 11 · explorer 10 · humano(auto) 7 · military 7 · economic 5
-                     objetivo 14 (35%) · puntuacion 26 (65%) · 8.38 dias de media
+semillas 1000-1029   humano(auto) 10 · explorer 7 · economic 6 · diplomatic 5 · military 2
+   (con diplomacia)  objetivo 16 (53%) · puntuacion 14 (47%) · 8.00 dias de media
 ```
 
 Lo que dicen estos numeros:
@@ -175,6 +227,11 @@ Lo que dicen estos numeros:
 - **El rediseno del mapa arreglo el sesgo diplomatico** que tenia la version
   anterior (ganaba un 36%). Con muros y puertas con horario, evitar el combate
   ya no es una estrategia dominante: el cinturon hay que cruzarlo.
+- **Anadir diplomacia estuvo a punto de matar el combate.** En la primera
+  version los pactos eran casi gratis y los cinco bots acababan pactados entre
+  si: cero batallas en seis partidas seguidas. Lo detecto un test que exige que
+  el bucle siga vivo. La confianza pasa a costar tributo o tiempo, y los bots no
+  sostienen mas de dos acuerdos.
 - **Hallazgo pendiente: el perfil militar es el mas irregular** (2 victorias en
   un barrido, 7 en el otro). Depende demasiado de que su sector toque un
   cinturon rico. Es el siguiente numero que tocaria.

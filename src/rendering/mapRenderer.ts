@@ -497,6 +497,43 @@ export class MapRenderer {
         }
       }
 
+      // A player's capital is their city: it gets a real silhouette, because
+      // it is where they recruit and deploy from all match long.
+      if (tile.feature.startFor) {
+        const owner = state.players.find((p) => p.id === tile.feature.startFor);
+        const cityColor = owner?.color ?? 0xffffff;
+        const blockMaterial = new THREE.MeshLambertMaterial({ color: 0xbdb2a1 });
+        // Offset towards the back of the hex: an army standing in the city
+        // otherwise sits inside the buildings and neither reads.
+        const cx = x;
+        const cz = z - 0.2;
+        const towers: [number, number, number][] = [
+          [0, 0.72, 0],
+          [-0.3, 0.46, 0.16],
+          [0.28, 0.52, -0.14],
+          [0.16, 0.34, 0.24],
+          [-0.18, 0.38, -0.24],
+        ];
+        for (const [ox, height, oz] of towers) {
+          const block = new THREE.Mesh(new THREE.BoxGeometry(0.26, height, 0.26), blockMaterial);
+          block.position.set(cx + ox, top + height / 2, cz + oz);
+          this.markerGroup.add(block);
+        }
+        // Owner-coloured banner over the keep.
+        const banner = new THREE.Mesh(
+          new THREE.BoxGeometry(0.38, 0.1, 0.38),
+          new THREE.MeshBasicMaterial({ color: cityColor }),
+        );
+        banner.position.set(cx, top + 0.78, cz);
+        this.markerGroup.add(banner);
+        const mast = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.03, 0.03, 0.3, 5),
+          new THREE.MeshBasicMaterial({ color: cityColor }),
+        );
+        mast.position.set(cx, top + 0.95, cz);
+        this.markerGroup.add(mast);
+      }
+
       if (tile.feature.cache && !tile.feature.cache.taken) {
         const crate = new THREE.Mesh(
           new THREE.BoxGeometry(0.2, 0.2, 0.2),
@@ -545,11 +582,14 @@ export class MapRenderer {
       const count = perHex.get(army.hex) ?? 1;
       const index = placed.get(army.hex) ?? 0;
       placed.set(army.hex, index + 1);
+      // A city occupies the back of its hex, so troops garrisoned there muster
+      // in front of it instead of disappearing inside the buildings.
+      const cityOffset = tile.feature.startFor ? 0.34 : 0;
       if (count > 1) {
         const angle = (index / count) * Math.PI * 2;
-        model.position.set(x + Math.cos(angle) * 0.3, top, z + Math.sin(angle) * 0.3);
+        model.position.set(x + Math.cos(angle) * 0.3, top, z + cityOffset + Math.sin(angle) * 0.3);
       } else {
-        model.position.set(x, top, z);
+        model.position.set(x, top, z + cityOffset);
       }
       // Face roughly towards the map centre: armies read as heading inward.
       model.rotation.y = Math.atan2(-x, -z);

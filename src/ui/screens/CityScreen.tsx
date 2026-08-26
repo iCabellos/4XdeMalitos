@@ -207,7 +207,7 @@ export function CityScreen() {
                     const def = troopDef(id);
                     const level = city.troopLevels[id] ?? 1;
                     const check = canUpgradeTroop(city, id);
-                    const locked = cityTier(city) < def.cityTier;
+                    const locked = (city.buildings.barracks ?? 0) < def.barracksLevel;
                     return (
                       <div key={id} className="row" style={{ flexWrap: 'wrap' }}>
                         <span className="grow">

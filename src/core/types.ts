@@ -4,6 +4,7 @@ import type { AnyMatchResourceId } from '../data/resources';
 import type { MapBuildingId } from '../data/buildings.map';
 import type { ObjectiveGoal } from '../data/objectives';
 import type { ZoneId } from '../data/zones';
+import type { Stance } from '../data/diplomacy';
 
 export type PlayerId = string;
 
@@ -164,6 +165,10 @@ export interface ObjectiveProgress {
  */
 export interface PlayerLoadout {
   cityTier: number;
+  /** Barracks level: decides which troops this player may recruit at all. */
+  barracksLevel: number;
+  /** Ceiling on troops held across every army. */
+  trainingCapacity: number;
   startStock: Partial<Stock>;
   citizens: number;
   armySlots: number;
@@ -213,8 +218,11 @@ export interface MatchPlayer {
   armySlots: number;
   score: number;
   eliminated: boolean;
-  /** Bots this player has a non-aggression understanding with. */
-  nonAggression: PlayerId[];
+  /**
+   * Standing with every other participant. Opinion drives what they will sign;
+   * stance is what has actually been signed.
+   */
+  relations: Record<PlayerId, { stance: Stance; opinion: number }>;
   /** Region id this player spawned in. */
   homeRegion: number;
   /** Running per-match statistics used by the results screen. */

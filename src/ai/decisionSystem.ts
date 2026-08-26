@@ -5,6 +5,7 @@ import { armyPower } from '../core/combat';
 import { armySize } from '../core/movement';
 import { findMainObjectiveHex } from '../core/objectives';
 import { ZONES } from '../data/zones';
+import { isBoundNotToAttack } from '../core/diplomacy';
 import type { Army, MatchPlayer, MatchState } from '../core/types';
 import type { StrategyWeights } from './strategies';
 
@@ -148,7 +149,7 @@ export function scoreDestination(
     const theirPower = armyPower(state, other);
     const ratio = theirPower > 0 ? myPower / theirPower : 3;
     const proximity = 3 - distance;
-    if (player.nonAggression.includes(other.owner)) continue;
+    if (isBoundNotToAttack(state, player.id, other.owner)) continue;
     if (ratio >= 1.2) {
       score += weights.aggression * proximity * 6 * Math.min(2, ratio);
       if (distance <= 1) reason = 'atacar';

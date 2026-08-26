@@ -23,18 +23,27 @@ import {
   moveUnits,
 } from '../../core/actions';
 import { UnitPicker, CommanderPicker } from '../components/OrderPickers';
+import { DayTasksPanel } from '../components/DayTasksPanel';
+import { ResourcePanel } from '../components/ResourcePanel';
+import { DiplomacyPanel } from '../components/DiplomacyPanel';
+import { BasePanel } from '../components/BasePanel';
 import { ZONES } from '../../data/zones';
+import { deriveDayTasks, pendingTaskCount } from '../../core/dayTasks';
 import type { MapViewSelection } from '../../rendering/mapRenderer';
 import type { HexId } from '../../map/hex';
 import type { MapBuildingId } from '../../data/buildings.map';
 
-type Tab = 'info' | 'army' | 'build' | 'tech' | 'standings';
+type Tab = 'tasks' | 'info' | 'base' | 'army' | 'build' | 'tech' | 'diplomacy' | 'economy' | 'standings';
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'tasks', label: 'HOY' },
   { id: 'info', label: 'INFO' },
+  { id: 'base', label: 'CIUDAD' },
   { id: 'army', label: 'EJERCITO' },
   { id: 'build', label: 'CONSTRUIR' },
   { id: 'tech', label: 'TECNOLOGIA' },
+  { id: 'economy', label: 'MATERIALES' },
+  { id: 'diplomacy', label: 'DIPLOMACIA' },
   { id: 'standings', label: 'RANKING' },
 ];
 
@@ -52,7 +61,7 @@ export function MatchScreen() {
   const nextDay = useGame((s) => s.nextDay);
   const simulateRest = useGame((s) => s.simulateRestOfMatch);
   const abandon = useGame((s) => s.abandonMatch);
-  const [tab, setTab] = useState<Tab>('info');
+  const [tab, setTab] = useState<Tab>('tasks');
   // The camera opens on the player's own base rather than the map origin: the
   // centre of the map is locked terrain they cannot act on yet.
   const [focusHex, setFocusHex] = useState<HexId | null>(null);
@@ -154,6 +163,8 @@ export function MatchScreen() {
     // Tapping a hex holding one of our armies selects it: fewer taps on mobile.
     const own = Object.values(match.armies).find((a) => a.hex === hex && a.owner === player.id);
     if (own) selectArmy(own.id);
+    // Your capital IS your city: tapping it opens the city, like a march map.
+    if (match.tiles[hex]?.feature.startFor === player.id) setTab('base');
   };
 
   const onBuildPick = (buildingId: MapBuildingId) => {
@@ -224,6 +235,7 @@ export function MatchScreen() {
   const nextZoneOpening = ([2, 3] as const)
     .map((z) => ZONES[z].gatesOpenOnDay)
     .find((day) => day > match.day);
+  const pendingTasks = pendingTaskCount(deriveDayTasks(match, player.id));
 
   return (
     <div className="screen">
@@ -252,6 +264,14 @@ export function MatchScreen() {
           <span className="icon">★</span>
           <span className="value">{player.score}</span>
         </span>
+        <button
+          className="res clickable-res"
+          title="Acciones que aun puedes hacer hoy"
+          onClick={() => setTab('tasks')}
+        >
+          <span className="icon">{'\u{1F4CB}'}</span>
+          <span className="value">{pendingTasks}</span>
+        </button>
         {nextZoneOpening !== undefined && (
           <span
             className="res"
@@ -305,11 +325,59 @@ export function MatchScreen() {
             />
           )}
 
+          {tab === 'tasks' && (
+            <>
+              <DayTasksPanel
+                state={match}
+                viewerId={player.id}
+                tick={tick}
+                onFocus={(hex) => {
+                  selectHex(hex);
+                  setFocusHex(hex);
+                  const own = Object.values(match.armies).find(
+                    (a) => a.hex === hex && a.owner === player.id,
+                  );
+                  if (own) selectArmy(own.id);
+                }}
+                onTab={(next) => setTab(next as Tab)}
+              />
+              <ObjectivesPanel state={match} viewerId={player.id} />
+            </>
+          )}
           {tab === 'info' && (
             <>
               <ContextPanel state={match} viewerId={player.id} hex={selectedHex} />
               <ObjectivesPanel state={match} viewerId={player.id} />
             </>
+          )}
+          {tab === 'base' && (
+            <BasePanel
+              state={match}
+              viewerId={player.id}
+              onAct={(message) => {
+                notify(message);
+                refresh();
+              }}
+              onFocus={(hex) => {
+                selectHex(hex);
+                setFocusHex(hex);
+              }}
+              onSelectArmy={(id) => {
+                selectArmy(id);
+                setFocusHex(match.armies[id]?.hex ?? null);
+              }}
+            />
+          )}
+          {tab === 'economy' && <ResourcePanel state={match} viewerId={player.id} tick={tick} />}
+          {tab === 'diplomacy' && (
+            <DiplomacyPanel
+              state={match}
+              viewerId={player.id}
+              onAct={(message) => {
+                notify(message);
+                refresh();
+              }}
+            />
           )}
           {tab === 'army' && (
             <ArmyPanel

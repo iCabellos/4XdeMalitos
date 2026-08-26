@@ -22,6 +22,7 @@ import { resolveCombat } from './combat';
 import { tickObjectives } from './objectives';
 import { updateTerritory } from './territory';
 import { updateFog } from '../map/fogOfWar';
+import { driftRelations } from './diplomacy';
 import { updateAllScores, standings } from './scoring';
 import { armiesOf, createArmy, playerById } from './gameState';
 import { enemyArmiesAt } from './actions';
@@ -59,6 +60,7 @@ export function startDay(state: MatchState): void {
   }
 
   openScheduledGates(state);
+  driftRelations(state);
 
   state.phase = 'production';
   for (const player of state.players) {

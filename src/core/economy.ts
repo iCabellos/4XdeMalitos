@@ -224,6 +224,51 @@ export function gatherWithArmy(
   return out;
 }
 
+/**
+ * Net daily balance per resource: what the player will actually gain or lose
+ * tomorrow if nothing changes. Production minus building upkeep, troop upkeep
+ * and the citizen food draw, so a negative number is directly explainable.
+ */
+export function computeNetBalance(
+  state: MatchState,
+  player: MatchPlayer,
+): Partial<Record<AnyMatchResourceId, number>> {
+  const net: Partial<Record<AnyMatchResourceId, number>> = {};
+
+  for (const line of computeProduction(state, player)) {
+    if (!line.online) continue;
+    for (const [key, value] of Object.entries(line.amounts)) {
+      if (!value) continue;
+      const id = key as AnyMatchResourceId;
+      const scaled = id === 'science' ? value * player.modifiers.scienceMultiplier : value;
+      net[id] = (net[id] ?? 0) + scaled;
+    }
+  }
+
+  for (const building of Object.values(state.buildings)) {
+    if (building.owner !== player.id || building.daysRemaining > 0) continue;
+    const def = mapBuildingDef(building.buildingId);
+    for (const [key, value] of Object.entries(def.upkeep ?? {})) {
+      if (!value) continue;
+      net[key as AnyMatchResourceId] = (net[key as AnyMatchResourceId] ?? 0) - value;
+    }
+  }
+
+  for (const army of Object.values(state.armies)) {
+    if (army.owner !== player.id) continue;
+    for (const [troopId, count] of Object.entries(army.composition)) {
+      if (count <= 0) continue;
+      for (const [key, value] of Object.entries(troopDef(troopId).upkeep)) {
+        if (!value) continue;
+        net[key as AnyMatchResourceId] = (net[key as AnyMatchResourceId] ?? 0) - value * count;
+      }
+    }
+  }
+
+  net.food = (net.food ?? 0) - player.citizensTotal * BALANCE.citizens.foodPerCitizen;
+  return net;
+}
+
 export interface TrainCheck {
   ok: boolean;
   reason: string | null;
@@ -260,10 +305,18 @@ export function canTrain(
     return { ...empty, cost, reason: 'Solo en la base inicial o en una base militar' };
   }
   const def = troopDef(troopId);
-  const slotsUsed = armySlotsUsed(army);
-  if (slotsUsed + def.slots * count > armySlotCapacity(player)) {
-    return { ...empty, cost, reason: 'Capacidad del ejercito superada' };
+  // Capacity is a single pool across every army, the way army camps work in a
+  // city builder: the barracks decides how big a force you can sustain at all.
+  const used = trainingCapacityUsed(state, player.id);
+  const capacity = trainingCapacity(state, player);
+  if (used + def.slots * count > capacity) {
+    return {
+      ...empty,
+      cost,
+      reason: `Contingente completo (${used}/${capacity}). Sube el Cuartel o construye una base militar.`,
+    };
   }
+  void army;
   if (!canAfford(player.stock, cost)) {
     return { ...empty, cost, reason: 'Recursos insuficientes', missing: missingResources(player.stock, cost) };
   }
@@ -302,8 +355,27 @@ export function armySlotsUsed(army: Army): number {
   return used;
 }
 
-/** How large a single army may grow, driven by city tier and citizens. */
-export function armySlotCapacity(player: MatchPlayer): number {
-  return 40 + player.loadout.cityTier * 25 + player.citizensTotal * 2;
+/**
+ * Total troop capacity across every army this player fields. The barracks sets
+ * the base, each finished military base adds a forward depot on top.
+ */
+export function trainingCapacity(state: MatchState, player: MatchPlayer): number {
+  let capacity = player.loadout.trainingCapacity;
+  for (const building of Object.values(state.buildings)) {
+    if (building.owner !== player.id) continue;
+    if (building.buildingId !== 'military_base' || building.daysRemaining > 0) continue;
+    capacity += 40;
+  }
+  return capacity;
+}
+
+/** Population slots currently spent across all of a player's armies. */
+export function trainingCapacityUsed(state: MatchState, playerId: string): number {
+  let used = 0;
+  for (const army of Object.values(state.armies)) {
+    if (army.owner !== playerId) continue;
+    used += armySlotsUsed(army);
+  }
+  return used;
 }
 
